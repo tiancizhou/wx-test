@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, init_db
 from models import User, Good, Order, OrderStatus, ChatLog, Role
-from schemas import GoodOut, GoodUpdate, OrderCreate, OrderOut, ChatMessage, ChatLogOut, UserOut
+from schemas import GoodOut, GoodUpdate, OrderCreate, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
 from deps import get_current_user, require_role
 from wechat.config import settings
 from wechat.token import get_jssdk_signature
@@ -322,6 +322,91 @@ async def get_me(user: User = Depends(get_current_user)):
 
 
 # ============================================================
+# 超级管理员（开发者页面，密码认证）
+# ============================================================
+
+async def verify_admin_key(x_admin_key: str = Header(..., alias="X-Admin-Key")):
+    if x_admin_key != settings.ADMIN_KEY:
+        raise HTTPException(401, "管理员密钥错误")
+    return True
+
+
+@app.post("/admin/login")
+async def admin_login(data: AdminLogin):
+    """管理员密码登录"""
+    if data.password != settings.ADMIN_KEY:
+        raise HTTPException(401, "密码错误")
+    return {"token": data.password}
+
+
+@app.get("/admin/users", response_model=list[UserOut])
+async def admin_list_users(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_admin_key),
+):
+    """获取所有用户列表"""
+    result = await db.execute(select(User).order_by(User.id))
+    return result.scalars().all()
+
+
+@app.post("/admin/users", response_model=UserOut)
+async def admin_create_user(
+    data: UserCreate,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_admin_key),
+):
+    """创建用户"""
+    result = await db.execute(select(User).where(User.openid == data.openid))
+    if result.scalar_one_or_none():
+        raise HTTPException(400, "该 openid 已存在")
+    user = User(
+        openid=data.openid,
+        role=data.role,
+        nickname=data.nickname,
+        phone=data.phone,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@app.put("/admin/users/{user_id}", response_model=UserOut)
+async def admin_update_user(
+    user_id: int,
+    data: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_admin_key),
+):
+    """更新用户信息/角色"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(404, "用户不存在")
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(user, k, v)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@app.delete("/admin/users/{user_id}")
+async def admin_delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_admin_key),
+):
+    """删除用户"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(404, "用户不存在")
+    await db.delete(user)
+    await db.commit()
+    return {"msg": "已删除"}
+
+
+# ============================================================
 # 本地测试：绕过 OAuth 直接登录
 # ============================================================
 
@@ -432,6 +517,11 @@ async def merchant_page():
 @app.get("/service")
 async def service_page():
     return FileResponse(FRONTEND_DIR / "service.html")
+
+
+@app.get("/admin")
+async def admin_page():
+    return FileResponse(FRONTEND_DIR / "admin.html")
 
 
 # ============================================================

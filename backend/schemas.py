@@ -77,3 +77,20 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AdminLogin(BaseModel):
+    password: str
+
+
+class UserCreate(BaseModel):
+    openid: str
+    role: str = "CUSTOMER"
+    nickname: str = ""
+    phone: str = ""
+
+
+class UserUpdate(BaseModel):
+    role: Optional[str] = None
+    nickname: Optional[str] = None
+    phone: Optional[str] = None
