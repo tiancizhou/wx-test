@@ -85,7 +85,7 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
         <span class="order-status" :style="{background: statusColor(o.status)}">{{ statusText(o.status) }}</span>
       </div>
       <div style="font-size:13px;color:#666;margin-top:8px;">
-        {{ o.address }} · {{ o.appointment_time }}
+        {{ o.phone }} · {{ o.appointment_time }}
       </div>
       <div style="font-size:15px;color:#e74c3c;margin-top:6px;">¥{{ (o.total_fee/100).toFixed(0) }}</div>
     </div>
