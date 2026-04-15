@@ -389,6 +389,15 @@ STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+# 微信域名验证文件（根路径）
+@app.get("/MP_verify_{file_id}.txt")
+async def mp_verify(file_id: str):
+    f = STATIC_DIR / f"MP_verify_{file_id}.txt"
+    if f.exists():
+        return FileResponse(f, media_type="text/plain")
+    raise HTTPException(404)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8080, reload=True)
