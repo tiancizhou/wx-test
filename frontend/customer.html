@@ -57,7 +57,7 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
       <div style="font-size:20px;font-weight:700;">到家按摩</div>
       <div style="font-size:13px;opacity:.8;margin-top:4px;">专业技师 上门服务</div>
     </div>
-    <div v-for="g in goods" :key="g.id" class="good-card" @click="openBook(g)">
+    <div v-for="g in goods" :key="g.id" class="good-card" @click="openDetail(g)">
       <img :src="g.img_url || 'https://via.placeholder.com/130'" class="good-img">
       <div class="good-info">
         <div>
@@ -71,6 +71,7 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
           </div>
           <span class="good-tag">{{ g.duration }}分钟</span>
         </div>
+        <div style="font-size:11px;color:#999;margin-top:2px;">已售 {{ g.sales || 0 }} · 点击查看详情</div>
       </div>
     </div>
   </div>
@@ -116,6 +117,32 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
       <van-cell title="角色" :value="user.role" />
     </van-cell-group>
   </div>
+
+  <!-- 商品详情弹窗 -->
+  <van-popup v-model:show="showDetail" position="bottom" round :style="{ minHeight: '70%' }">
+    <div style="max-height:85vh;overflow-y:auto;">
+      <div v-if="detailGood" style="padding-bottom:80px;">
+        <img :src="detailGood.img_url" style="width:100%;max-height:300px;object-fit:cover;">
+        <div style="padding:16px;">
+          <div style="font-size:18px;font-weight:700;">{{ detailGood.title }}</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;">
+            <span style="color:#e74c3c;font-size:24px;font-weight:700;">¥{{ (detailGood.price/100).toFixed(0) }}</span>
+            <span v-if="detailGood.original_price" style="font-size:14px;color:#bbb;text-decoration:line-through;">¥{{ (detailGood.original_price/100).toFixed(0) }}</span>
+            <span style="font-size:13px;color:#999;margin-left:auto;">已售 {{ detailGood.sales || 0 }} · {{ detailGood.duration }}分钟</span>
+          </div>
+          <div style="font-size:14px;color:#666;margin-top:16px;line-height:1.6;white-space:pre-wrap;">{{ detailGood.description }}</div>
+          <div v-if="detailImages.length" style="margin-top:16px;">
+            <div v-for="(img, i) in detailImages" :key="i" style="margin-bottom:8px;">
+              <img :src="img" style="width:100%;border-radius:8px;" @click="previewImage(i)">
+            </div>
+          </div>
+        </div>
+        <div style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#fff;border-top:1px solid #eee;">
+          <van-button type="primary" block round @click="showDetail=false;openBook(detailGood)">立即预约 · ¥{{ (detailGood.price/100).toFixed(0) }}</van-button>
+        </div>
+      </div>
+    </div>
+  </van-popup>
 
   <!-- 预约弹窗 -->
   <van-popup v-model:show="showBook" position="bottom" round :style="{ minHeight: '40%' }">
@@ -208,6 +235,9 @@ const app = createApp({
     const bookGood = ref(null);
     const bookForm = ref({ phone: '', address: '', time: '' });
     const unreadCount = ref(0);
+    const showDetail = ref(false);
+    const detailGood = ref(null);
+    const detailImages = ref([]);
     let pollTimer = null;
 
     const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
@@ -237,6 +267,15 @@ const app = createApp({
         await nextTick();
         if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
       }
+    }
+
+    function openDetail(g) {
+      detailGood.value = g;
+      try { detailImages.value = JSON.parse(g.detail_images || '[]'); } catch { detailImages.value = []; }
+      showDetail.value = true;
+    }
+    function previewImage(index) {
+      vant.ImagePreview({ images: detailImages.value, startPosition: index });
     }
 
     function openBook(g) {
@@ -296,7 +335,8 @@ const app = createApp({
     return {
       ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
       chatBox, showBook, bookGood, bookForm, unreadCount,
-      openBook, submitOrder, openChat, sendMessage,
+      showDetail, detailGood, detailImages,
+      openBook, submitOrder, openChat, sendMessage, openDetail, previewImage,
       statusText, statusColor, roleLabel
     };
   }

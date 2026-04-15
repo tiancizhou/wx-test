@@ -1,13 +1,14 @@
 import time
 import hashlib
+import uuid
 import xml.etree.cElementTree as ET
 from contextlib import asynccontextmanager
 
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header
+from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -193,6 +194,33 @@ async def delete_good(
     await db.delete(good)
     await db.commit()
     return {"msg": "已删除"}
+
+
+# ============================================================
+# 图片上传
+# ============================================================
+
+UPLOAD_DIR = Path(__file__).parent / "static" / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@app.post("/upload")
+async def upload_image(
+    file: UploadFile = File(...),
+    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+):
+    """上传图片，返回可访问的 URL"""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "只能上传图片文件")
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4().hex[:12]}.{ext}"
+    filepath = UPLOAD_DIR / filename
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "图片不能超过5MB")
+    with open(filepath, "wb") as f:
+        f.write(content)
+    return {"url": f"/static/uploads/{filename}"}
 
 
 # ============================================================

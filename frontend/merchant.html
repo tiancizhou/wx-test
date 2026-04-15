@@ -32,6 +32,12 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
 .good-card-btn.primary { color: #1890ff; }
 .good-card-btn.success { color: #07c160; }
 .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
+.upload-area { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px; }
+.upload-thumb { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; position: relative; }
+.upload-add { width: 60px; height: 60px; border: 1px dashed #ccc; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #ccc; cursor: pointer; }
+.upload-add:hover { border-color: #1890ff; color: #1890ff; }
+.upload-remove { position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; background: #e74c3c; color: #fff; border-radius: 50%; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; line-height: 1; }
+.img-thumb-wrap { position: relative; display: inline-block; }
 </style>
 </head>
 <body>
@@ -103,6 +109,7 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
             <span v-if="g.original_price" style="font-size:12px;color:#bbb;text-decoration:line-through;">¥{{ (g.original_price/100).toFixed(0) }}</span>
             <span style="font-size:12px;color:#999;margin-left:auto;">{{ g.duration }}分钟</span>
           </div>
+          <div style="font-size:12px;color:#999;margin-top:2px;">已售 {{ g.sales || 0 }}</div>
           <div style="font-size:12px;margin-top:4px;">
             <span class="status-dot" :style="{background: g.is_active ? '#07c160' : '#ccc'}"></span>
             <span :style="{color: g.is_active ? '#07c160' : '#999'}">{{ g.is_active ? '上架中' : '已下架' }}</span>
@@ -120,18 +127,45 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
   </div>
 
   <!-- 创建/编辑商品弹窗 -->
-  <van-popup v-model:show="showGoodForm" position="bottom" round :style="{ minHeight: '60%' }">
-    <div style="padding:20px;">
+  <van-popup v-model:show="showGoodForm" position="bottom" round :style="{ minHeight: '75%' }">
+    <div style="padding:20px;max-height:85vh;overflow-y:auto;">
       <div style="font-size:16px;font-weight:600;margin-bottom:16px;">{{ isEditGood ? '编辑商品' : '创建商品' }}</div>
       <van-cell-group inset>
-        <van-field v-model="goodForm.title" label="名称" placeholder="商品名称" />
-        <van-field v-model="goodForm.description" label="描述" type="textarea" rows="2" placeholder="商品描述" />
-        <van-field v-model="goodForm.priceYuan" label="价格(元)" type="number" placeholder="如 298" />
+        <van-field v-model="goodForm.title" label="名称" placeholder="商品名称" required />
+        <van-field v-model="goodForm.description" label="简介" type="textarea" rows="3" placeholder="商品简介" />
+        <van-field v-model="goodForm.priceYuan" label="价格(元)" type="number" placeholder="如 298" required />
         <van-field v-model="goodForm.originalPriceYuan" label="原价(元)" type="number" placeholder="如 398（可选）" />
         <van-field v-model="goodForm.duration" label="时长(分钟)" type="number" placeholder="如 60" />
-        <van-field v-model="goodForm.img_url" label="图片URL" placeholder="商品图片链接" />
+        <van-field v-model="goodForm.sales" label="销量" type="number" placeholder="如 128" />
       </van-cell-group>
-      <van-button type="primary" block round style="margin-top:16px;" @click="saveGoodForm">
+
+      <!-- 封面图 -->
+      <div style="padding:8px 16px;font-size:14px;color:#666;">封面图</div>
+      <div class="upload-area">
+        <div v-if="goodForm.img_url" class="img-thumb-wrap">
+          <img :src="goodForm.img_url" class="upload-thumb">
+          <div class="upload-remove" @click="goodForm.img_url=''">&times;</div>
+        </div>
+        <label class="upload-add">
+          +
+          <input type="file" accept="image/*" style="display:none" @change="e => uploadCover(e)">
+        </label>
+      </div>
+
+      <!-- 详情图 -->
+      <div style="padding:8px 16px;font-size:14px;color:#666;">详情图（最多9张）</div>
+      <div class="upload-area">
+        <div v-for="(img, i) in goodForm.detailImages" :key="i" class="img-thumb-wrap">
+          <img :src="img" class="upload-thumb">
+          <div class="upload-remove" @click="removeDetailImg(i)">&times;</div>
+        </div>
+        <label v-if="goodForm.detailImages.length < 9" class="upload-add">
+          +
+          <input type="file" accept="image/*" style="display:none" @change="e => uploadDetail(e)">
+        </label>
+      </div>
+
+      <van-button type="primary" block round style="margin-top:16px;" @click="saveGoodForm" :loading="savingGood">
         {{ isEditGood ? '保存修改' : '创建商品' }}
       </van-button>
     </div>
@@ -200,10 +234,44 @@ const app = createApp({
     // 商品表单
     const showGoodForm = ref(false);
     const isEditGood = ref(false);
-    const goodForm = ref({ id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', img_url: '' });
+    const savingGood = ref(false);
+    const goodForm = ref({ id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', sales: '0', img_url: '', detailImages: [] });
 
     function emptyGoodForm() {
-      return { id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', img_url: '' };
+      return { id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', sales: '0', img_url: '', detailImages: [] };
+    }
+
+    async function uploadImage(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/upload', { method: 'POST', headers: { 'X-Token': TOKEN() }, body: formData });
+      if (!res.ok) throw new Error('上传失败');
+      const data = await res.json();
+      return data.url;
+    }
+    async function uploadCover(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        vant.showToast({ message: '上传中...', forbidClick: true, duration: 0 });
+        goodForm.value.img_url = await uploadImage(file);
+        vant.closeToast();
+      } catch (err) { vant.showToast('上传失败'); }
+      e.target.value = '';
+    }
+    async function uploadDetail(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        vant.showToast({ message: '上传中...', forbidClick: true, duration: 0 });
+        const url = await uploadImage(file);
+        goodForm.value.detailImages.push(url);
+        vant.closeToast();
+      } catch (err) { vant.showToast('上传失败'); }
+      e.target.value = '';
+    }
+    function removeDetailImg(i) {
+      goodForm.value.detailImages.splice(i, 1);
     }
 
     async function loadOrders() { orders.value = await api('/orders/active'); }
@@ -242,6 +310,8 @@ const app = createApp({
     }
     function openEditGood(g) {
       isEditGood.value = true;
+      let detailImages = [];
+      try { detailImages = JSON.parse(g.detail_images || '[]'); } catch {}
       goodForm.value = {
         id: g.id,
         title: g.title,
@@ -249,29 +319,38 @@ const app = createApp({
         priceYuan: g.price ? String(g.price / 100) : '',
         originalPriceYuan: g.original_price ? String(g.original_price / 100) : '',
         duration: String(g.duration),
+        sales: String(g.sales || 0),
         img_url: g.img_url,
+        detailImages,
       };
       showGoodForm.value = true;
     }
     async function saveGoodForm() {
-      const f = goodForm.value;
-      const payload = {
-        title: f.title,
-        description: f.description,
-        price: Math.round(Number(f.priceYuan) * 100),
-        original_price: f.originalPriceYuan ? Math.round(Number(f.originalPriceYuan) * 100) : 0,
-        duration: Number(f.duration),
-        img_url: f.img_url,
-      };
-      if (isEditGood.value) {
-        await api(`/goods/${f.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-        vant.showToast('已保存');
-      } else {
-        await api('/goods', { method: 'POST', body: JSON.stringify(payload) });
-        vant.showToast('创建成功');
+      savingGood.value = true;
+      try {
+        const f = goodForm.value;
+        const payload = {
+          title: f.title,
+          description: f.description,
+          price: Math.round(Number(f.priceYuan) * 100),
+          original_price: f.originalPriceYuan ? Math.round(Number(f.originalPriceYuan) * 100) : 0,
+          duration: Number(f.duration),
+          img_url: f.img_url,
+          sales: Number(f.sales || 0),
+          detail_images: JSON.stringify(f.detailImages),
+        };
+        if (isEditGood.value) {
+          await api(`/goods/${f.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+          vant.showToast('已保存');
+        } else {
+          await api('/goods', { method: 'POST', body: JSON.stringify(payload) });
+          vant.showToast('创建成功');
+        }
+        showGoodForm.value = false;
+        loadGoods();
+      } finally {
+        savingGood.value = false;
       }
-      showGoodForm.value = false;
-      loadGoods();
     }
     async function toggleGood(g) {
       await api(`/goods/${g.id}`, { method: 'PUT', body: JSON.stringify({ is_active: !g.is_active }) });
@@ -306,9 +385,10 @@ const app = createApp({
 
     return {
       ready, activeTab, orders, goods, currentOrder, messages, msgInput, chatBox,
-      showGoodForm, isEditGood, goodForm,
+      showGoodForm, isEditGood, savingGood, goodForm,
       openChat, acceptOrder, completeOrder, sendMessage,
       openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,
+      uploadCover, uploadDetail, removeDetailImg,
       statusText, statusColor, roleLabel
     };
   }

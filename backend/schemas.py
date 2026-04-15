@@ -12,6 +12,8 @@ class GoodOut(BaseModel):
     duration: int
     img_url: str
     is_active: bool
+    sales: int
+    detail_images: str
 
     class Config:
         from_attributes = True
@@ -25,6 +27,8 @@ class GoodUpdate(BaseModel):
     duration: Optional[int] = None
     img_url: Optional[str] = None
     is_active: Optional[bool] = None
+    sales: Optional[int] = None
+    detail_images: Optional[str] = None
 
 
 class GoodCreate(BaseModel):
@@ -34,6 +38,8 @@ class GoodCreate(BaseModel):
     original_price: int = 0
     duration: int = 60
     img_url: str = ""
+    sales: int = 0
+    detail_images: str = "[]"
 
 
 # ---- Order ----

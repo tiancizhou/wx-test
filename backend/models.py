@@ -45,6 +45,8 @@ class Good(Base):
     duration: Mapped[int] = mapped_column(Integer, default=60, comment="时长，单位分钟")
     img_url: Mapped[str] = mapped_column(String(512), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sales: Mapped[int] = mapped_column(Integer, default=0, comment="销量")
+    detail_images: Mapped[str] = mapped_column(Text, default="[]", comment="详情图JSON数组")
 
 
 def _generate_order_id():

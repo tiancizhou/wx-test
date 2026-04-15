@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
@@ -19,3 +20,13 @@ async def get_db():
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # 迁移：给已有的 goods 表添加新列
+        alter_statements = [
+            ("goods", "sales", "INTEGER DEFAULT 0"),
+            ("goods", "detail_images", "TEXT DEFAULT '[]'"),
+        ]
+        for table, column, col_type in alter_statements:
+            try:
+                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+            except Exception:
+                pass  # 列已存在则忽略
