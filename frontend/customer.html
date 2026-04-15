@@ -7,9 +7,11 @@
 <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
 <script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
+<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+.loading-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #fff; display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .good-card { display: flex; background: #fff; margin: 10px; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
 .good-img { width: 130px; height: 130px; object-fit: cover; flex-shrink: 0; }
 .good-info { flex: 1; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; }
@@ -35,6 +37,12 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
 </head>
 <body>
 <div id="app">
+  <!-- 登录加载中 -->
+  <div v-if="!ready" class="loading-mask">
+    <van-loading size="36px">正在登录...</van-loading>
+  </div>
+
+  <template v-else>
   <!-- Tab Bar -->
   <van-tabbar v-model="activeTab">
     <van-tabbar-item icon="home-o">首页</van-tabbar-item>
@@ -104,7 +112,7 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
   <!-- 我的 -->
   <div v-show="activeTab === 3" style="padding:30px 16px;">
     <van-cell-group inset>
-      <van-cell title="用户" :value="user.nickname || '未登录'" />
+      <van-cell title="用户" :value="user.nickname || '未设置'" />
       <van-cell title="角色" :value="user.role" />
     </van-cell-group>
   </div>
@@ -124,15 +132,67 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
       </van-button>
     </div>
   </van-popup>
+  </template>
 </div>
 
 <script>
-const { createApp, ref, onMounted, onUnmounted, nextTick, watch } = Vue;
+// ---- 微信 OAuth 登录 + JS-SDK 初始化 ----
+const WX_APP_ID = '';  // 填入你的 AppID
+const WX_OAUTH_BASE = 'https://open.weixin.qq.com/connect/oauth2/authorize';
+
+async function wxLogin() {
+  const token = localStorage.getItem('wx_token');
+  if (token) return token;
+
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+
+  if (code) {
+    // 用 code 换 token
+    const res = await fetch(`/wechat/auth?code=${code}`);
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem('wx_token', data.token);
+      // 清除 URL 中的 code 参数
+      params.delete('code');
+      params.delete('state');
+      const clean = params.toString();
+      history.replaceState(null, '', location.pathname + (clean ? '?' + clean : ''));
+      return data.token;
+    }
+  }
+
+  // 没有 token 也没有 code → 跳转微信 OAuth
+  const redirectUri = encodeURIComponent(location.href.split('?')[0]);
+  location.href = `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_base&state=customer#wechat_redirect`;
+}
+
+async function wxJSSDKInit() {
+  try {
+    const url = location.href.split('#')[0];
+    const res = await fetch(`/wechat/jssdk?url=${encodeURIComponent(url)}`);
+    if (!res.ok) return;
+    const cfg = await res.json();
+    wx.config({
+      debug: false,
+      appId: cfg.appId,
+      timestamp: cfg.timestamp,
+      nonceStr: cfg.nonceStr,
+      signature: cfg.signature,
+      jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData', 'getLocation']
+    });
+  } catch (e) {
+    console.warn('JS-SDK 初始化失败:', e);
+  }
+}
+
+const { createApp, ref, onMounted, onUnmounted, nextTick } = Vue;
 
 const app = createApp({
   setup() {
-    const API = '';  // 后端地址，同域留空
+    const API = '';
     const TOKEN = () => localStorage.getItem('wx_token') || '';
+    const ready = ref(false);
 
     const activeTab = ref(0);
     const goods = ref([]);
@@ -151,31 +211,22 @@ const app = createApp({
 
     const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
 
-    // ---- API ----
     async function api(path, opts = {}) {
       const res = await fetch(API + path, { headers: headers(), ...opts });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
 
-    async function loadGoods() {
-      goods.value = await api('/goods');
-    }
-
-    async function loadOrders() {
-      orders.value = await api('/my_orders');
-    }
-
+    async function loadGoods() { goods.value = await api('/goods'); }
+    async function loadOrders() { orders.value = await api('/my_orders'); }
     async function loadMe() {
       try { user.value = await api('/me'); userId.value = user.value.id; } catch {}
     }
-
     async function loadChat(orderId) {
       messages.value = await api(`/chat/${orderId}?after_id=0`);
       await nextTick();
       if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
     }
-
     async function pollChat() {
       if (!currentOrder.value) return;
       const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
@@ -187,13 +238,11 @@ const app = createApp({
       }
     }
 
-    // ---- Actions ----
     function openBook(g) {
       bookGood.value = g;
       bookForm.value = { phone: '', address: '', time: '' };
       showBook.value = true;
     }
-
     async function submitOrder() {
       try {
         await api('/orders', {
@@ -204,17 +253,13 @@ const app = createApp({
         vant.showToast('预约成功');
         loadOrders();
         activeTab.value = 1;
-      } catch (e) {
-        vant.showToast('预约失败: ' + e.message);
-      }
+      } catch (e) { vant.showToast('预约失败: ' + e.message); }
     }
-
     function openChat(order) {
       currentOrder.value = order;
       activeTab.value = 2;
       loadChat(order.id);
     }
-
     async function sendMessage() {
       if (!msgInput.value.trim() || !currentOrder.value) return;
       try {
@@ -224,27 +269,31 @@ const app = createApp({
         });
         msgInput.value = '';
         await pollChat();
-      } catch (e) {
-        vant.showToast('发送失败');
-      }
+      } catch (e) { vant.showToast('发送失败'); }
     }
 
-    // ---- Helpers ----
     function statusText(s) { return ['待支付','待接单','已接单','已完成'][s] || '未知'; }
     function statusColor(s) { return ['#999','#ff9800','#07c160','#999'][s] || '#999'; }
     function roleLabel(r) { return { CUSTOMER: '客户', MERCHANT: '商家', SERVICE: '客服' }[r] || r; }
 
-    onMounted(() => {
-      loadGoods();
-      loadOrders();
-      loadMe();
-      pollTimer = setInterval(pollChat, 5000);
+    onMounted(async () => {
+      try {
+        await wxLogin();
+        ready.value = true;
+        wxJSSDKInit();
+        loadGoods();
+        loadOrders();
+        loadMe();
+        pollTimer = setInterval(pollChat, 5000);
+      } catch (e) {
+        console.error('登录失败:', e);
+      }
     });
 
     onUnmounted(() => clearInterval(pollTimer));
 
     return {
-      activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
+      ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
       chatBox, showBook, bookGood, bookForm, unreadCount,
       openBook, submitOrder, openChat, sendMessage,
       statusText, statusColor, roleLabel

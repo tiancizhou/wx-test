@@ -17,6 +17,9 @@ from models import User, Good, Order, OrderStatus, ChatLog, Role
 from schemas import GoodOut, GoodUpdate, OrderCreate, OrderOut, ChatMessage, ChatLogOut, UserOut
 from deps import get_current_user, require_role
 from wechat.config import settings
+from wechat.token import get_jssdk_signature
+from wechat.menu import create_menu as wx_create_menu
+from wechat.template import notify_order_accepted, notify_order_completed
 
 
 # ---- Lifespan ----
@@ -55,7 +58,7 @@ async def wechat_verify(signature: str, timestamp: str, nonce: str, echostr: str
 
 
 @app.post("/wechat")
-async def wechat_message(request: Request):
+async def wechat_message(request: Request, db: AsyncSession = Depends(get_db)):
     """接收微信消息与事件推送"""
     body = (await request.body()).decode("utf-8")
     msg_signature = request.query_params.get("msg_signature", "")
@@ -78,8 +81,15 @@ async def wechat_message(request: Request):
 
     if msg_type == "event":
         event = root.findtext("Event", "")
-        if event == "subscribe":
-            # 用户关注：返回欢迎语
+        if event in ("subscribe", "SCAN"):
+            # 关注/扫码：自动创建用户 + 返回欢迎语
+            result = await db.execute(select(User).where(User.openid == from_user))
+            user = result.scalar_one_or_none()
+            if not user:
+                user = User(openid=from_user, role=Role.CUSTOMER)
+                db.add(user)
+                await db.commit()
+
             reply = f"""<xml>
 <ToUserName><![CDATA[{from_user}]]></ToUserName>
 <FromUserName><![CDATA[{to_user}]]></FromUserName>
@@ -197,6 +207,18 @@ async def accept_order(
         raise HTTPException(400, "订单状态不允许接单")
     order.status = OrderStatus.ACCEPTED
     await db.commit()
+
+    # 推送模板消息通知客户
+    try:
+        await db.refresh(order.customer)
+        await notify_order_accepted(
+            openid=order.customer.openid,
+            order_id=order.id,
+            appointment_time=order.appointment_time,
+        )
+    except Exception as e:
+        print(f"[WARN] 模板消息推送失败: {e}")
+
     return {"msg": "接单成功"}
 
 
@@ -214,6 +236,17 @@ async def complete_order(
         raise HTTPException(400, "订单状态不允许完成")
     order.status = OrderStatus.COMPLETED
     await db.commit()
+
+    # 推送模板消息通知客户
+    try:
+        await db.refresh(order.customer)
+        await notify_order_completed(
+            openid=order.customer.openid,
+            order_id=order.id,
+        )
+    except Exception as e:
+        print(f"[WARN] 模板消息推送失败: {e}")
+
     return {"msg": "订单已完成"}
 
 
@@ -295,6 +328,35 @@ async def wechat_auth(code: str, db: AsyncSession = Depends(get_db)):
         await db.refresh(user)
 
     return {"token": openid, "user": UserOut.model_validate(user)}
+
+
+# ============================================================
+# JS-SDK 签名
+# ============================================================
+
+@app.get("/wechat/jssdk")
+async def jssdk_config(url: str):
+    """返回 JS-SDK 页面签名配置"""
+    try:
+        return await get_jssdk_signature(url)
+    except Exception as e:
+        raise HTTPException(500, f"JS-SDK 签名失败: {e}")
+
+
+# ============================================================
+# 自定义菜单
+# ============================================================
+
+@app.post("/wechat/menu")
+async def setup_menu(
+    base_url: str,
+    user: User = Depends(require_role(Role.ADMIN)),
+):
+    """管理员创建自定义菜单"""
+    result = await wx_create_menu(base_url)
+    if result.get("errcode", 0) != 0:
+        raise HTTPException(400, f"菜单创建失败: {result}")
+    return {"msg": "菜单创建成功", "data": result}
 
 
 # ============================================================
