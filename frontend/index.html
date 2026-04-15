@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>到家按摩</title>
+<link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
+<script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
+<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+.container { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+.logo { width: 80px; height: 80px; background: linear-gradient(135deg, #07c160, #06ad56); border-radius: 20px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 36px; font-weight: 700; margin-bottom: 20px; }
+.title { font-size: 22px; font-weight: 700; color: #333; margin-bottom: 8px; }
+.subtitle { font-size: 14px; color: #999; margin-bottom: 40px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="container">
+    <div class="logo">摩</div>
+    <div class="title">到家按摩</div>
+    <div class="subtitle">专业技师 上门服务</div>
+    <van-loading v-if="loading" size="36px">正在登录...</van-loading>
+    <div v-else-if="error" style="color:#e74c3c;">{{ error }}</div>
+  </div>
+</div>
+
+<script>
+const WX_APP_ID = 'wx418d84117fe16bcc';
+const WX_OAUTH_BASE = 'https://open.weixin.qq.com/connect/oauth2/authorize';
+
+const { createApp, ref, onMounted } = Vue;
+
+const app = createApp({
+  setup() {
+    const loading = ref(true);
+    const error = ref('');
+
+    onMounted(async () => {
+      try {
+        // 1. 已有 token → 直接判断角色跳转
+        const token = localStorage.getItem('wx_token');
+        if (token) {
+          await redirectByRole(token);
+          return;
+        }
+
+        // 2. URL 有 code → 用 code 换 token
+        const params = new URLSearchParams(location.search);
+        const code = params.get('code');
+        if (code) {
+          const res = await fetch(`/wechat/auth?code=${code}`);
+          if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem('wx_token', data.token);
+            // 清除 URL 参数
+            history.replaceState(null, '', location.pathname);
+            await redirectByRole(data.token);
+            return;
+          }
+        }
+
+        // 3. 都没有 → 跳转微信 OAuth
+        const redirectUri = encodeURIComponent(location.href.split('?')[0]);
+        location.href = `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_base&state=home#wechat_redirect`;
+      } catch (e) {
+        error.value = '登录失败: ' + e.message;
+        loading.value = false;
+      }
+    });
+
+    async function redirectByRole(token) {
+      const res = await fetch('/me', { headers: { 'X-Token': token } });
+      if (!res.ok) {
+        localStorage.removeItem('wx_token');
+        loading.value = false;
+        error.value = '获取用户信息失败';
+        return;
+      }
+      const user = await res.json();
+
+      // 根据角色跳转
+      const rolePages = {
+        CUSTOMER: '/customer',
+        MERCHANT: '/merchant',
+        SERVICE: '/service',
+        ADMIN: '/merchant',
+      };
+      const page = rolePages[user.role] || '/customer';
+      location.replace(page);
+    }
+
+    return { loading, error };
+  }
+});
+
+app.use(vant);
+app.mount('#app');
+</script>
+</body>
+</html>

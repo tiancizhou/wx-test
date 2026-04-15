@@ -17,19 +17,9 @@ async def create_menu(base_url: str) -> dict:
     menu_data = {
         "button": [
             {
-                "name": "预约按摩",
+                "name": "进入系统",
                 "type": "view",
-                "url": f"{base_url}/customer",
-            },
-            {
-                "name": "商家管理",
-                "type": "view",
-                "url": f"{base_url}/merchant",
-            },
-            {
-                "name": "客服中心",
-                "type": "view",
-                "url": f"{base_url}/service",
+                "url": base_url,
             },
         ]
     }

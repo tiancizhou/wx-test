@@ -366,6 +366,12 @@ async def setup_menu(
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 
+@app.get("/")
+async def index_page():
+    """统一入口：OAuth 登录后根据角色跳转"""
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
 @app.get("/customer")
 async def customer_page():
     return FileResponse(FRONTEND_DIR / "customer.html")
