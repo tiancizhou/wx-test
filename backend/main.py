@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, init_db
 from models import User, Good, Order, OrderStatus, ChatLog, Role
-from schemas import GoodOut, GoodUpdate, OrderCreate, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
+from schemas import GoodOut, GoodUpdate, GoodCreate, OrderCreate, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
 from deps import get_current_user, require_role
 from wechat.config import settings
 from wechat.token import get_jssdk_signature
@@ -137,6 +137,30 @@ async def list_goods(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
+@app.get("/goods/all", response_model=list[GoodOut])
+async def list_all_goods(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+):
+    """商家/管理员：获取全部商品（含已下架）"""
+    result = await db.execute(select(Good).order_by(Good.id))
+    return result.scalars().all()
+
+
+@app.post("/goods", response_model=GoodOut)
+async def create_good(
+    data: GoodCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+):
+    """创建商品"""
+    good = Good(**data.model_dump())
+    db.add(good)
+    await db.commit()
+    await db.refresh(good)
+    return good
+
+
 @app.put("/goods/{good_id}", response_model=GoodOut)
 async def update_good(
     good_id: int,
@@ -153,6 +177,22 @@ async def update_good(
     await db.commit()
     await db.refresh(good)
     return good
+
+
+@app.delete("/goods/{good_id}")
+async def delete_good(
+    good_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+):
+    """删除商品"""
+    result = await db.execute(select(Good).where(Good.id == good_id))
+    good = result.scalar_one_or_none()
+    if not good:
+        raise HTTPException(404, "商品不存在")
+    await db.delete(good)
+    await db.commit()
+    return {"msg": "已删除"}
 
 
 # ============================================================

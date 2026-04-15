@@ -27,6 +27,15 @@ class GoodUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class GoodCreate(BaseModel):
+    title: str
+    description: str = ""
+    price: int
+    original_price: int = 0
+    duration: int = 60
+    img_url: str = ""
+
+
 # ---- Order ----
 class OrderCreate(BaseModel):
     good_id: int

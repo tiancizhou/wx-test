@@ -21,7 +21,17 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
 .chat-input-bar { display: flex; padding: 8px 10px; background: #fff; border-top: 1px solid #eee; }
 .chat-input-bar input { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 8px 14px; font-size: 14px; outline: none; }
 .chat-input-bar button { margin-left: 8px; border: none; background: #07c160; color: #fff; border-radius: 20px; padding: 0 20px; font-size: 14px; }
-.good-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; }
+.good-card { background: #fff; margin: 10px; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.good-card-top { display: flex; padding: 12px; }
+.good-card-img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #f0f0f0; }
+.good-card-info { flex: 1; margin-left: 12px; display: flex; flex-direction: column; justify-content: space-between; }
+.good-card-bottom { display: flex; border-top: 1px solid #f5f5f5; }
+.good-card-btn { flex: 1; text-align: center; padding: 10px 0; font-size: 13px; color: #666; cursor: pointer; border-right: 1px solid #f5f5f5; }
+.good-card-btn:last-child { border-right: none; }
+.good-card-btn.danger { color: #e74c3c; }
+.good-card-btn.primary { color: #1890ff; }
+.good-card-btn.success { color: #07c160; }
+.status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
 </style>
 </head>
 <body>
@@ -34,7 +44,7 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
   <van-tabbar v-model="activeTab">
     <van-tabbar-item icon="orders-o">订单</van-tabbar-item>
     <van-tabbar-item icon="chat-o">沟通</van-tabbar-item>
-    <van-tabbar-item icon="setting-o">商品</van-tabbar-item>
+    <van-tabbar-item icon="shop-o">商品</van-tabbar-item>
   </van-tabbar>
 
   <!-- 待接单/活跃订单 -->
@@ -75,30 +85,57 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
 
   <!-- 商品管理 -->
   <div v-show="activeTab === 2" style="padding-bottom:60px;">
-    <div style="padding:12px 16px;font-weight:600;font-size:16px;">商品管理</div>
-    <div v-for="g in goods" :key="g.id" class="good-row">
-      <div>
-        <div style="font-weight:500;">{{ g.title }}</div>
-        <div style="font-size:13px;color:#e74c3c;">¥{{ (g.price/100).toFixed(0) }} / {{ g.duration }}分钟</div>
+    <div style="padding:12px 16px;font-weight:600;font-size:16px;display:flex;justify-content:space-between;align-items:center;">
+      <span>商品管理 ({{ goods.length }})</span>
+      <van-button size="small" type="primary" icon="plus" @click="openCreateGood">创建商品</van-button>
+    </div>
+    <div v-if="!goods.length" style="text-align:center;padding:60px 0;color:#999;">暂无商品，点击右上角创建</div>
+    <div v-for="g in goods" :key="g.id" class="good-card">
+      <div class="good-card-top">
+        <img :src="g.img_url || 'https://via.placeholder.com/80'" class="good-card-img" @error="$event.target.src='https://via.placeholder.com/80'">
+        <div class="good-card-info">
+          <div>
+            <div style="font-weight:600;font-size:15px;">{{ g.title }}</div>
+            <div style="font-size:12px;color:#999;margin-top:4px;">{{ g.description || '暂无描述' }}</div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:6px;">
+            <span style="color:#e74c3c;font-size:17px;font-weight:700;">¥{{ (g.price/100).toFixed(0) }}</span>
+            <span v-if="g.original_price" style="font-size:12px;color:#bbb;text-decoration:line-through;">¥{{ (g.original_price/100).toFixed(0) }}</span>
+            <span style="font-size:12px;color:#999;margin-left:auto;">{{ g.duration }}分钟</span>
+          </div>
+          <div style="font-size:12px;margin-top:4px;">
+            <span class="status-dot" :style="{background: g.is_active ? '#07c160' : '#ccc'}"></span>
+            <span :style="{color: g.is_active ? '#07c160' : '#999'}">{{ g.is_active ? '上架中' : '已下架' }}</span>
+          </div>
+        </div>
       </div>
-      <div>
-        <van-switch v-model="g.is_active" size="20px" @change="toggleGood(g)" />
-        <van-button size="mini" style="margin-left:6px;" @click="editGood(g)">编辑</van-button>
+      <div class="good-card-bottom">
+        <div class="good-card-btn" :class="g.is_active ? 'danger' : 'success'" @click="toggleGood(g)">
+          {{ g.is_active ? '下架' : '上架' }}
+        </div>
+        <div class="good-card-btn primary" @click="openEditGood(g)">编辑</div>
+        <div class="good-card-btn danger" @click="confirmDeleteGood(g)">删除</div>
       </div>
     </div>
-
-    <van-popup v-model:show="showEdit" position="bottom" round :style="{ minHeight: '40%' }">
-      <div style="padding:20px;">
-        <div style="font-size:16px;font-weight:600;margin-bottom:16px;">编辑商品</div>
-        <van-cell-group inset>
-          <van-field v-model="editForm.title" label="名称" />
-          <van-field v-model="editForm.price" label="价格(分)" type="number" />
-          <van-field v-model="editForm.duration" label="时长(分钟)" type="number" />
-        </van-cell-group>
-        <van-button type="primary" block round style="margin-top:16px;" @click="saveGood">保存</van-button>
-      </div>
-    </van-popup>
   </div>
+
+  <!-- 创建/编辑商品弹窗 -->
+  <van-popup v-model:show="showGoodForm" position="bottom" round :style="{ minHeight: '60%' }">
+    <div style="padding:20px;">
+      <div style="font-size:16px;font-weight:600;margin-bottom:16px;">{{ isEditGood ? '编辑商品' : '创建商品' }}</div>
+      <van-cell-group inset>
+        <van-field v-model="goodForm.title" label="名称" placeholder="商品名称" />
+        <van-field v-model="goodForm.description" label="描述" type="textarea" rows="2" placeholder="商品描述" />
+        <van-field v-model="goodForm.priceYuan" label="价格(元)" type="number" placeholder="如 298" />
+        <van-field v-model="goodForm.originalPriceYuan" label="原价(元)" type="number" placeholder="如 398（可选）" />
+        <van-field v-model="goodForm.duration" label="时长(分钟)" type="number" placeholder="如 60" />
+        <van-field v-model="goodForm.img_url" label="图片URL" placeholder="商品图片链接" />
+      </van-cell-group>
+      <van-button type="primary" block round style="margin-top:16px;" @click="saveGoodForm">
+        {{ isEditGood ? '保存修改' : '创建商品' }}
+      </van-button>
+    </div>
+  </van-popup>
   </template>
 </div>
 
@@ -158,12 +195,19 @@ const app = createApp({
     const messages = ref([]);
     const msgInput = ref('');
     const chatBox = ref(null);
-    const showEdit = ref(false);
-    const editForm = ref({});
     let pollTimer = null;
 
+    // 商品表单
+    const showGoodForm = ref(false);
+    const isEditGood = ref(false);
+    const goodForm = ref({ id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', img_url: '' });
+
+    function emptyGoodForm() {
+      return { id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', img_url: '' };
+    }
+
     async function loadOrders() { orders.value = await api('/orders/active'); }
-    async function loadGoods() { goods.value = await api('/goods'); }
+    async function loadGoods() { goods.value = await api('/goods/all'); }
     async function loadChat(orderId) {
       messages.value = await api(`/chat/${orderId}?after_id=0`);
       await nextTick();
@@ -189,16 +233,60 @@ const app = createApp({
       msgInput.value = '';
       await pollChat();
     }
-    function editGood(g) {
-      editForm.value = { id: g.id, title: g.title, price: String(g.price), duration: String(g.duration) };
-      showEdit.value = true;
+
+    // ---- 商品管理 ----
+    function openCreateGood() {
+      isEditGood.value = false;
+      goodForm.value = emptyGoodForm();
+      showGoodForm.value = true;
     }
-    async function saveGood() {
-      await api(`/goods/${editForm.value.id}`, { method: 'PUT', body: JSON.stringify({ title: editForm.value.title, price: Number(editForm.value.price), duration: Number(editForm.value.duration) }) });
-      showEdit.value = false; vant.showToast('已保存'); loadGoods();
+    function openEditGood(g) {
+      isEditGood.value = true;
+      goodForm.value = {
+        id: g.id,
+        title: g.title,
+        description: g.description,
+        priceYuan: g.price ? String(g.price / 100) : '',
+        originalPriceYuan: g.original_price ? String(g.original_price / 100) : '',
+        duration: String(g.duration),
+        img_url: g.img_url,
+      };
+      showGoodForm.value = true;
+    }
+    async function saveGoodForm() {
+      const f = goodForm.value;
+      const payload = {
+        title: f.title,
+        description: f.description,
+        price: Math.round(Number(f.priceYuan) * 100),
+        original_price: f.originalPriceYuan ? Math.round(Number(f.originalPriceYuan) * 100) : 0,
+        duration: Number(f.duration),
+        img_url: f.img_url,
+      };
+      if (isEditGood.value) {
+        await api(`/goods/${f.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        vant.showToast('已保存');
+      } else {
+        await api('/goods', { method: 'POST', body: JSON.stringify(payload) });
+        vant.showToast('创建成功');
+      }
+      showGoodForm.value = false;
+      loadGoods();
     }
     async function toggleGood(g) {
-      await api(`/goods/${g.id}`, { method: 'PUT', body: JSON.stringify({ is_active: g.is_active }) });
+      await api(`/goods/${g.id}`, { method: 'PUT', body: JSON.stringify({ is_active: !g.is_active }) });
+      vant.showToast(g.is_active ? '已下架' : '已上架');
+      loadGoods();
+    }
+    function confirmDeleteGood(g) {
+      vant.showConfirmDialog({ title: '确认删除', message: `删除商品「${g.title}」？此操作不可恢复。` })
+        .then(() => deleteGood(g.id))
+        .catch(() => {});
+    }
+    async function deleteGood(id) {
+      await api(`/goods/${id}`, { method: 'DELETE' });
+      vant.showToast('已删除');
+      loadGoods();
     }
 
     function statusText(s) { return ['待支付','待接单','已接单','已完成'][s]; }
@@ -218,8 +306,10 @@ const app = createApp({
 
     return {
       ready, activeTab, orders, goods, currentOrder, messages, msgInput, chatBox,
-      showEdit, editForm, openChat, acceptOrder, completeOrder, sendMessage,
-      editGood, saveGood, toggleGood, statusText, statusColor, roleLabel
+      showGoodForm, isEditGood, goodForm,
+      openChat, acceptOrder, completeOrder, sendMessage,
+      openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,
+      statusText, statusColor, roleLabel
     };
   }
 });
