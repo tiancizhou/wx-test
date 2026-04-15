@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>到家按摩</title>
+<link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
+<script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+.good-card { display: flex; background: #fff; margin: 10px; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.good-img { width: 130px; height: 130px; object-fit: cover; flex-shrink: 0; }
+.good-info { flex: 1; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; }
+.good-title { font-size: 15px; font-weight: 600; color: #333; }
+.good-desc { font-size: 12px; color: #999; margin-top: 4px; }
+.good-bottom { display: flex; align-items: flex-end; justify-content: space-between; }
+.good-price { color: #e74c3c; font-size: 18px; font-weight: 700; }
+.good-price .unit { font-size: 12px; }
+.good-original { font-size: 12px; color: #bbb; text-decoration: line-through; margin-left: 6px; }
+.good-tag { background: #ff9800; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+.chat-wrap { display: flex; flex-direction: column; height: 100vh; background: #f0f0f0; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 10px; }
+.bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; word-break: break-all; }
+.bubble-left { background: #fff; align-self: flex-start; border-bottom-left-radius: 4px; }
+.bubble-right { background: #95ec69; align-self: flex-end; border-bottom-right-radius: 4px; }
+.bubble-role { font-size: 11px; color: #999; margin-bottom: 2px; }
+.chat-input-bar { display: flex; padding: 8px 10px; background: #fff; border-top: 1px solid #eee; }
+.chat-input-bar input { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 8px 14px; font-size: 14px; outline: none; }
+.chat-input-bar button { margin-left: 8px; border: none; background: #07c160; color: #fff; border-radius: 20px; padding: 0 20px; font-size: 14px; }
+.order-card { background: #fff; margin: 10px; border-radius: 10px; padding: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.order-status { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 4px; color: #fff; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Tab Bar -->
+  <van-tabbar v-model="activeTab">
+    <van-tabbar-item icon="home-o">首页</van-tabbar-item>
+    <van-tabbar-item icon="orders-o">订单</van-tabbar-item>
+    <van-tabbar-item icon="chat-o" :badge="unreadCount || ''">消息</van-tabbar-item>
+    <van-tabbar-item icon="contact">我的</van-tabbar-item>
+  </van-tabbar>
+
+  <!-- 首页：商品列表 -->
+  <div v-show="activeTab === 0" style="padding-bottom:60px;">
+    <div style="background:linear-gradient(135deg,#07c160,#06ad56);padding:20px 16px 30px;color:#fff;">
+      <div style="font-size:20px;font-weight:700;">到家按摩</div>
+      <div style="font-size:13px;opacity:.8;margin-top:4px;">专业技师 上门服务</div>
+    </div>
+    <div v-for="g in goods" :key="g.id" class="good-card" @click="openBook(g)">
+      <img :src="g.img_url || 'https://via.placeholder.com/130'" class="good-img">
+      <div class="good-info">
+        <div>
+          <div class="good-title">{{ g.title }}</div>
+          <div class="good-desc">{{ g.description }}</div>
+        </div>
+        <div class="good-bottom">
+          <div>
+            <span class="good-price"><span class="unit">¥</span>{{ (g.price/100).toFixed(0) }}</span>
+            <span class="good-original" v-if="g.original_price">¥{{ (g.original_price/100).toFixed(0) }}</span>
+          </div>
+          <span class="good-tag">{{ g.duration }}分钟</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 订单列表 -->
+  <div v-show="activeTab === 1" style="padding-bottom:60px;">
+    <div v-if="!orders.length" style="text-align:center;padding:60px 0;color:#999;">暂无订单</div>
+    <div v-for="o in orders" :key="o.id" class="order-card" @click="openChat(o)">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:600;">订单 {{ o.id.slice(-8) }}</span>
+        <span class="order-status" :style="{background: statusColor(o.status)}">{{ statusText(o.status) }}</span>
+      </div>
+      <div style="font-size:13px;color:#666;margin-top:8px;">
+        {{ o.address }} · {{ o.appointment_time }}
+      </div>
+      <div style="font-size:15px;color:#e74c3c;margin-top:6px;">¥{{ (o.total_fee/100).toFixed(0) }}</div>
+    </div>
+  </div>
+
+  <!-- 聊天 -->
+  <div v-show="activeTab === 2" class="chat-wrap">
+    <div v-if="!currentOrder" style="text-align:center;padding:80px 0;color:#999;">请从订单进入聊天</div>
+    <template v-else>
+      <div class="chat-messages" ref="chatBox">
+        <div v-for="m in messages" :key="m.id"
+             :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left']"
+             style="display:flex;flex-direction:column;">
+          <div class="bubble-role">{{ roleLabel(m.sender_role) }}</div>
+          <div>{{ m.content }}</div>
+        </div>
+      </div>
+      <div class="chat-input-bar">
+        <input v-model="msgInput" placeholder="输入消息..." @keyup.enter="sendMessage">
+        <button @click="sendMessage">发送</button>
+      </div>
+    </template>
+  </div>
+
+  <!-- 我的 -->
+  <div v-show="activeTab === 3" style="padding:30px 16px;">
+    <van-cell-group inset>
+      <van-cell title="用户" :value="user.nickname || '未登录'" />
+      <van-cell title="角色" :value="user.role" />
+    </van-cell-group>
+  </div>
+
+  <!-- 预约弹窗 -->
+  <van-popup v-model:show="showBook" position="bottom" round :style="{ minHeight: '40%' }">
+    <div style="padding:20px;">
+      <div style="font-size:16px;font-weight:600;margin-bottom:16px;">预约 {{ bookGood?.title }}</div>
+      <van-cell-group inset>
+        <van-field v-model="bookForm.phone" label="手机号" placeholder="请输入手机号" type="tel" />
+        <van-field v-model="bookForm.address" label="地址" placeholder="请输入服务地址" />
+        <van-field v-model="bookForm.time" label="预约时间" placeholder="如: 2026-04-16 14:00" />
+      </van-cell-group>
+      <van-button type="primary" block round style="margin-top:16px;" @click="submitOrder"
+                  :disabled="!bookForm.phone || !bookForm.address">
+        确认预约 · ¥{{ ((bookGood?.price||0)/100).toFixed(0) }}
+      </van-button>
+    </div>
+  </van-popup>
+</div>
+
+<script>
+const { createApp, ref, onMounted, onUnmounted, nextTick, watch } = Vue;
+
+const app = createApp({
+  setup() {
+    const API = '';  // 后端地址，同域留空
+    const TOKEN = () => localStorage.getItem('wx_token') || '';
+
+    const activeTab = ref(0);
+    const goods = ref([]);
+    const orders = ref([]);
+    const user = ref({});
+    const userId = ref(0);
+    const messages = ref([]);
+    const currentOrder = ref(null);
+    const msgInput = ref('');
+    const chatBox = ref(null);
+    const showBook = ref(false);
+    const bookGood = ref(null);
+    const bookForm = ref({ phone: '', address: '', time: '' });
+    const unreadCount = ref(0);
+    let pollTimer = null;
+
+    const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
+
+    // ---- API ----
+    async function api(path, opts = {}) {
+      const res = await fetch(API + path, { headers: headers(), ...opts });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    async function loadGoods() {
+      goods.value = await api('/goods');
+    }
+
+    async function loadOrders() {
+      orders.value = await api('/my_orders');
+    }
+
+    async function loadMe() {
+      try { user.value = await api('/me'); userId.value = user.value.id; } catch {}
+    }
+
+    async function loadChat(orderId) {
+      messages.value = await api(`/chat/${orderId}?after_id=0`);
+      await nextTick();
+      if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+    }
+
+    async function pollChat() {
+      if (!currentOrder.value) return;
+      const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
+      const newMsgs = await api(`/chat/${currentOrder.value.id}?after_id=${lastId}`);
+      if (newMsgs.length) {
+        messages.value.push(...newMsgs);
+        await nextTick();
+        if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+      }
+    }
+
+    // ---- Actions ----
+    function openBook(g) {
+      bookGood.value = g;
+      bookForm.value = { phone: '', address: '', time: '' };
+      showBook.value = true;
+    }
+
+    async function submitOrder() {
+      try {
+        await api('/orders', {
+          method: 'POST',
+          body: JSON.stringify({ good_id: bookGood.value.id, ...bookForm.value })
+        });
+        showBook.value = false;
+        vant.showToast('预约成功');
+        loadOrders();
+        activeTab.value = 1;
+      } catch (e) {
+        vant.showToast('预约失败: ' + e.message);
+      }
+    }
+
+    function openChat(order) {
+      currentOrder.value = order;
+      activeTab.value = 2;
+      loadChat(order.id);
+    }
+
+    async function sendMessage() {
+      if (!msgInput.value.trim() || !currentOrder.value) return;
+      try {
+        await api('/chat', {
+          method: 'POST',
+          body: JSON.stringify({ order_id: currentOrder.value.id, content: msgInput.value })
+        });
+        msgInput.value = '';
+        await pollChat();
+      } catch (e) {
+        vant.showToast('发送失败');
+      }
+    }
+
+    // ---- Helpers ----
+    function statusText(s) { return ['待支付','待接单','已接单','已完成'][s] || '未知'; }
+    function statusColor(s) { return ['#999','#ff9800','#07c160','#999'][s] || '#999'; }
+    function roleLabel(r) { return { CUSTOMER: '客户', MERCHANT: '商家', SERVICE: '客服' }[r] || r; }
+
+    onMounted(() => {
+      loadGoods();
+      loadOrders();
+      loadMe();
+      pollTimer = setInterval(pollChat, 5000);
+    });
+
+    onUnmounted(() => clearInterval(pollTimer));
+
+    return {
+      activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
+      chatBox, showBook, bookGood, bookForm, unreadCount,
+      openBook, submitOrder, openChat, sendMessage,
+      statusText, statusColor, roleLabel
+    };
+  }
+});
+
+app.use(vant);
+app.mount('#app');
+</script>
+</body>
+</html>

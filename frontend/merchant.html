@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>商家管理</title>
+<link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
+<script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+.order-card { background: #fff; margin: 10px; border-radius: 10px; padding: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.order-status { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 4px; color: #fff; }
+.bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
+.bubble-left { background: #fff; border-bottom-left-radius: 4px; }
+.bubble-right { background: #95ec69; border-bottom-right-radius: 4px; margin-left: auto; }
+.bubble-role { font-size: 11px; color: #999; margin-bottom: 2px; }
+.chat-input-bar { display: flex; padding: 8px 10px; background: #fff; border-top: 1px solid #eee; }
+.chat-input-bar input { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 8px 14px; font-size: 14px; outline: none; }
+.chat-input-bar button { margin-left: 8px; border: none; background: #07c160; color: #fff; border-radius: 20px; padding: 0 20px; font-size: 14px; }
+.good-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <van-tabbar v-model="activeTab">
+    <van-tabbar-item icon="orders-o">订单</van-tabbar-item>
+    <van-tabbar-item icon="chat-o">沟通</van-tabbar-item>
+    <van-tabbar-item icon="setting-o">商品</van-tabbar-item>
+  </van-tabbar>
+
+  <!-- 待接单/活跃订单 -->
+  <div v-show="activeTab === 0" style="padding-bottom:60px;">
+    <div style="padding:12px 16px;font-weight:600;font-size:16px;">活跃订单</div>
+    <div v-if="!orders.length" style="text-align:center;padding:60px 0;color:#999;">暂无活跃订单</div>
+    <div v-for="o in orders" :key="o.id" class="order-card" @click="openChat(o)">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:600;">{{ o.id.slice(-8) }}</span>
+        <span class="order-status" :style="{background: statusColor(o.status)}">{{ statusText(o.status) }}</span>
+      </div>
+      <div style="font-size:13px;color:#666;margin-top:6px;">{{ o.phone }} · {{ o.address }}</div>
+      <div style="font-size:13px;color:#999;">预约时间: {{ o.appointment_time }}</div>
+      <div style="font-size:15px;color:#e74c3c;margin-top:4px;">¥{{ (o.total_fee/100).toFixed(0) }}</div>
+      <div style="margin-top:10px;display:flex;gap:8px;" @click.stop>
+        <van-button v-if="o.status===1" size="small" type="primary" @click="acceptOrder(o.id)">接单</van-button>
+        <van-button v-if="o.status===2" size="small" type="success" @click="completeOrder(o.id)">完成</van-button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 聊天 -->
+  <div v-show="activeTab === 1" style="display:flex;flex-direction:column;height:100vh;">
+    <div v-if="!currentOrder" style="text-align:center;padding:80px 0;color:#999;">请从订单进入沟通</div>
+    <template v-else>
+      <div style="flex:1;overflow-y:auto;padding:10px;background:#f0f0f0;" ref="chatBox">
+        <div v-for="m in messages" :key="m.id" :class="['bubble', m.sender_role==='MERCHANT' ? 'bubble-right' : 'bubble-left']">
+          <div class="bubble-role">{{ roleLabel(m.sender_role) }}</div>
+          <div>{{ m.content }}</div>
+        </div>
+      </div>
+      <div class="chat-input-bar">
+        <input v-model="msgInput" placeholder="回复客户..." @keyup.enter="sendMessage">
+        <button @click="sendMessage">发送</button>
+      </div>
+    </template>
+  </div>
+
+  <!-- 商品管理 -->
+  <div v-show="activeTab === 2" style="padding-bottom:60px;">
+    <div style="padding:12px 16px;font-weight:600;font-size:16px;">商品管理</div>
+    <div v-for="g in goods" :key="g.id" class="good-row">
+      <div>
+        <div style="font-weight:500;">{{ g.title }}</div>
+        <div style="font-size:13px;color:#e74c3c;">¥{{ (g.price/100).toFixed(0) }} / {{ g.duration }}分钟</div>
+      </div>
+      <div>
+        <van-switch v-model="g.is_active" size="20px" @change="toggleGood(g)" />
+        <van-button size="mini" style="margin-left:6px;" @click="editGood(g)">编辑</van-button>
+      </div>
+    </div>
+
+    <van-popup v-model:show="showEdit" position="bottom" round :style="{ minHeight: '40%' }">
+      <div style="padding:20px;">
+        <div style="font-size:16px;font-weight:600;margin-bottom:16px;">编辑商品</div>
+        <van-cell-group inset>
+          <van-field v-model="editForm.title" label="名称" />
+          <van-field v-model="editForm.price" label="价格(分)" type="number" />
+          <van-field v-model="editForm.duration" label="时长(分钟)" type="number" />
+        </van-cell-group>
+        <van-button type="primary" block round style="margin-top:16px;" @click="saveGood">保存</van-button>
+      </div>
+    </van-popup>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, onMounted, onUnmounted, nextTick } = Vue;
+
+const app = createApp({
+  setup() {
+    const API = '';
+    const TOKEN = () => localStorage.getItem('wx_token') || '';
+    const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
+
+    async function api(path, opts = {}) {
+      const res = await fetch(API + path, { headers: headers(), ...opts });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    const activeTab = ref(0);
+    const orders = ref([]);
+    const goods = ref([]);
+    const currentOrder = ref(null);
+    const messages = ref([]);
+    const msgInput = ref('');
+    const chatBox = ref(null);
+    const showEdit = ref(false);
+    const editForm = ref({});
+    let pollTimer = null;
+
+    async function loadOrders() {
+      orders.value = await api('/orders/active');
+    }
+    async function loadGoods() {
+      goods.value = await api('/goods');
+    }
+    async function loadChat(orderId) {
+      messages.value = await api(`/chat/${orderId}?after_id=0`);
+      await nextTick();
+      if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+    }
+    async function pollChat() {
+      if (!currentOrder.value) return;
+      const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
+      const newMsgs = await api(`/chat/${currentOrder.value.id}?after_id=${lastId}`);
+      if (newMsgs.length) {
+        messages.value.push(...newMsgs);
+        await nextTick();
+        if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+      }
+    }
+
+    function openChat(order) {
+      currentOrder.value = order;
+      activeTab.value = 1;
+      loadChat(order.id);
+    }
+
+    async function acceptOrder(id) {
+      await api(`/orders/${id}/accept`, { method: 'POST' });
+      vant.showToast('已接单');
+      loadOrders();
+    }
+
+    async function completeOrder(id) {
+      await api(`/orders/${id}/complete`, { method: 'POST' });
+      vant.showToast('已完成');
+      loadOrders();
+    }
+
+    async function sendMessage() {
+      if (!msgInput.value.trim() || !currentOrder.value) return;
+      await api('/chat', {
+        method: 'POST',
+        body: JSON.stringify({ order_id: currentOrder.value.id, content: msgInput.value })
+      });
+      msgInput.value = '';
+      await pollChat();
+    }
+
+    function editGood(g) {
+      editForm.value = { id: g.id, title: g.title, price: String(g.price), duration: String(g.duration) };
+      showEdit.value = true;
+    }
+
+    async function saveGood() {
+      await api(`/goods/${editForm.value.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ title: editForm.value.title, price: Number(editForm.value.price), duration: Number(editForm.value.duration) })
+      });
+      showEdit.value = false;
+      vant.showToast('已保存');
+      loadGoods();
+    }
+
+    async function toggleGood(g) {
+      await api(`/goods/${g.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_active: g.is_active })
+      });
+    }
+
+    function statusText(s) { return ['待支付','待接单','已接单','已完成'][s]; }
+    function statusColor(s) { return ['#999','#ff9800','#07c160','#999'][s]; }
+    function roleLabel(r) { return { CUSTOMER:'客户', MERCHANT:'商家', SERVICE:'客服' }[r] || r; }
+
+    onMounted(() => { loadOrders(); loadGoods(); pollTimer = setInterval(() => { loadOrders(); pollChat(); }, 5000); });
+    onUnmounted(() => clearInterval(pollTimer));
+
+    return {
+      activeTab, orders, goods, currentOrder, messages, msgInput, chatBox,
+      showEdit, editForm, openChat, acceptOrder, completeOrder, sendMessage,
+      editGood, saveGood, toggleGood, statusText, statusColor, roleLabel
+    };
+  }
+});
+
+app.use(vant);
+app.mount('#app');
+</script>
+</body>
+</html>
