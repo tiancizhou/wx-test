@@ -9,4 +9,5 @@ dependencies = [
     "aiosqlite",
     "pycryptodome",
     "httpx",
+    "python-multipart",
 ]
