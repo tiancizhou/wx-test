@@ -138,30 +138,40 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
           </div>
         </div>
         <div style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#fff;border-top:1px solid #eee;">
-          <van-button type="primary" block round @click="showDetail=false;openBook(detailGood)">立即预约 · ¥{{ (detailGood.price/100).toFixed(0) }}</van-button>
+          <van-button type="primary" block round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ (detailGood.price/100).toFixed(0) }}</van-button>
         </div>
       </div>
     </div>
   </van-popup>
 
-  <!-- 预约弹窗 -->
-  <van-popup v-model:show="showBook" position="bottom" round :style="{ minHeight: '45%' }">
+  <!-- 下单弹窗 -->
+  <van-popup v-model:show="showBook" position="bottom" round :style="{ minHeight: '50%' }">
     <div style="padding:20px;">
-      <div style="font-size:16px;font-weight:600;margin-bottom:16px;">预约 {{ bookGood?.title }}</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:16px;">下单 {{ bookGood?.title }}</div>
       <div style="margin-bottom:12px;">
         <div style="font-size:13px;color:#666;margin-bottom:4px;">手机号 *</div>
         <input v-model="bookForm.phone" type="tel" placeholder="请输入手机号" style="width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:14px;outline:none;">
       </div>
       <div style="margin-bottom:12px;">
-        <div style="font-size:13px;color:#666;margin-bottom:4px;">服务地址 *</div>
-        <input v-model="bookForm.address" placeholder="请输入服务地址" style="width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:14px;outline:none;">
+        <div style="font-size:13px;color:#666;margin-bottom:6px;">选择日期 *</div>
+        <div style="display:flex;gap:8px;">
+          <div v-for="d in dateOptions" :key="d.value" @click="bookForm.date=d.value"
+               :style="{flex:1,textAlign:'center',padding:'10px 0',borderRadius:8,border: bookForm.date===d.value?'2px solid #07c160':'1px solid #ddd',color:bookForm.date===d.value?'#07c160':'#666',fontWeight:bookForm.date===d.value?600:400,fontSize:13,cursor:'pointer'}">
+            {{ d.label }}
+          </div>
+        </div>
       </div>
       <div style="margin-bottom:16px;">
-        <div style="font-size:13px;color:#666;margin-bottom:4px;">预约时间</div>
-        <input v-model="bookForm.time" placeholder="如: 2026-04-16 14:00" style="width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:14px;outline:none;">
+        <div style="font-size:13px;color:#666;margin-bottom:6px;">选择时段 *</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <div v-for="s in timeSlots" :key="s" @click="bookForm.timeSlot=s"
+               :style="{padding:'8px 14px',borderRadius:8,border:bookForm.timeSlot===s?'2px solid #07c160':'1px solid #ddd',color:bookForm.timeSlot===s?'#07c160':'#666',fontWeight:bookForm.timeSlot===s?600:400,fontSize:13,cursor:'pointer'}">
+            {{ s }}
+          </div>
+        </div>
       </div>
-      <van-button type="primary" block round @click="submitOrder" :loading="submitting" :disabled="!bookForm.phone || !bookForm.address">
-        确认预约 · ¥{{ ((bookGood?.price||0)/100).toFixed(0) }}
+      <van-button type="primary" block round @click="submitOrder" :loading="submitting" :disabled="!bookForm.phone || !bookForm.timeSlot">
+        确认下单 · ¥{{ ((bookGood?.price||0)/100).toFixed(0) }}
       </van-button>
     </div>
   </van-popup>
@@ -239,12 +249,32 @@ const app = createApp({
     const chatBox = ref(null);
     const showBook = ref(false);
     const bookGood = ref(null);
-    const bookForm = ref({ phone: '', address: '', time: '' });
+    const bookForm = ref({ phone: '', date: '', timeSlot: '' });
     const unreadCount = ref(0);
     const showDetail = ref(false);
     const detailGood = ref(null);
     const detailImages = ref([]);
     const submitting = ref(false);
+
+    const timeSlots = ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00','19:00-20:00','20:00-21:00'];
+    const dateOptions = ref([]);
+
+    function initDateOptions() {
+      const today = new Date();
+      const options = [];
+      for (let i = 0; i < 3; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        const mm = String(d.getMonth()+1).padStart(2,'0');
+        const dd = String(d.getDate()).padStart(2,'0');
+        const weekday = ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
+        const val = `${d.getFullYear()}-${mm}-${dd}`;
+        const label = i === 0 ? `今天 ${mm}/${dd}` : i === 1 ? `明天 ${mm}/${dd}` : `${weekday} ${mm}/${dd}`;
+        options.push({ value: val, label });
+      }
+      dateOptions.value = options;
+      bookForm.value.date = options[0].value;
+    }
     let pollTimer = null;
 
     const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
@@ -287,7 +317,8 @@ const app = createApp({
 
     function openBook(g) {
       bookGood.value = g;
-      bookForm.value = { phone: '', address: '', time: '' };
+      initDateOptions();
+      bookForm.value = { phone: '', date: dateOptions.value[0]?.value || '', timeSlot: '' };
       showBook.value = true;
     }
     async function submitOrder() {
@@ -299,15 +330,15 @@ const app = createApp({
           body: JSON.stringify({
             good_id: bookGood.value.id,
             phone: bookForm.value.phone,
-            address: bookForm.value.address,
-            appointment_time: bookForm.value.time,
+            address: '',
+            appointment_time: bookForm.value.date + ' ' + bookForm.value.timeSlot,
           }),
         });
 
         if (res.mock) {
           // Mock 模式：直接成功
           showBook.value = false;
-          vant.showToast('预约成功');
+          vant.showToast('下单成功');
           loadOrders();
           activeTab.value = 1;
           return;
@@ -336,7 +367,7 @@ const app = createApp({
         if (e.errMsg && e.errMsg.includes('cancel')) {
           vant.showToast('已取消支付');
         } else {
-          vant.showToast('预约失败: ' + (e.message || e.errMsg || e));
+          vant.showToast('下单失败: ' + (e.message || e.errMsg || e));
         }
       } finally {
         submitting.value = false;
@@ -382,7 +413,7 @@ const app = createApp({
     return {
       ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
       chatBox, showBook, bookGood, bookForm, unreadCount, submitting,
-      showDetail, detailGood, detailImages,
+      showDetail, detailGood, detailImages, timeSlots, dateOptions,
       openBook, submitOrder, openChat, sendMessage, openDetail, previewImage,
       statusText, statusColor, roleLabel
     };
