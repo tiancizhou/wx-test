@@ -127,20 +127,22 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
   </div>
 
   <!-- 创建/编辑商品弹窗 -->
-  <van-popup v-model:show="showGoodForm" position="bottom" round :style="{ minHeight: '75%' }">
-    <div style="padding:20px;max-height:85vh;overflow-y:auto;">
+  <van-popup v-model:show="showGoodForm" position="bottom" round :style="{ minHeight: '80%' }">
+    <div style="padding:20px;max-height:90vh;overflow-y:auto;">
       <div style="font-size:16px;font-weight:600;margin-bottom:16px;">{{ isEditGood ? '编辑商品' : '创建商品' }}</div>
+
+      <!-- 基本信息 -->
+      <div style="font-size:14px;font-weight:600;color:#333;margin-bottom:8px;">基本信息</div>
       <van-cell-group inset>
-        <van-field v-model="goodForm.title" label="名称" placeholder="商品名称" required />
-        <van-field v-model="goodForm.description" label="简介" type="textarea" rows="3" placeholder="商品简介" />
+        <van-field v-model="goodForm.title" label="商品名称" placeholder="请输入商品名称" required />
         <van-field v-model="goodForm.priceYuan" label="价格(元)" type="number" placeholder="如 298" required />
         <van-field v-model="goodForm.originalPriceYuan" label="原价(元)" type="number" placeholder="如 398（可选）" />
         <van-field v-model="goodForm.duration" label="时长(分钟)" type="number" placeholder="如 60" />
-        <van-field v-model="goodForm.sales" label="销量" type="number" placeholder="如 128" />
+        <van-field v-model="goodForm.sales" label="已售数量" type="number" placeholder="如 128" />
       </van-cell-group>
 
       <!-- 封面图 -->
-      <div style="padding:8px 16px;font-size:14px;color:#666;">封面图</div>
+      <div style="font-size:14px;font-weight:600;color:#333;margin:16px 0 8px;">封面图</div>
       <div class="upload-area">
         <div v-if="goodForm.img_url" class="img-thumb-wrap">
           <img :src="goodForm.img_url" class="upload-thumb">
@@ -152,8 +154,13 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
         </label>
       </div>
 
-      <!-- 详情图 -->
-      <div style="padding:8px 16px;font-size:14px;color:#666;">详情图（最多9张）</div>
+      <!-- 商品简介 -->
+      <div style="font-size:14px;font-weight:600;color:#333;margin:16px 0 8px;">商品简介</div>
+      <div style="padding:0 16px;">
+        <textarea v-model="goodForm.description" placeholder="请输入商品简介文字..." rows="4"
+                  style="width:100%;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:14px;resize:vertical;font-family:inherit;outline:none;"></textarea>
+      </div>
+      <div style="padding:4px 16px;font-size:12px;color:#999;">简介图片（最多9张）</div>
       <div class="upload-area">
         <div v-for="(img, i) in goodForm.detailImages" :key="i" class="img-thumb-wrap">
           <img :src="img" class="upload-thumb">
@@ -165,7 +172,7 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
         </label>
       </div>
 
-      <van-button type="primary" block round style="margin-top:16px;" @click="saveGoodForm" :loading="savingGood">
+      <van-button type="primary" block round style="margin-top:20px;" @click="saveGoodForm" :loading="savingGood">
         {{ isEditGood ? '保存修改' : '创建商品' }}
       </van-button>
     </div>
