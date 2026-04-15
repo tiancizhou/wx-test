@@ -145,16 +145,22 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
   </van-popup>
 
   <!-- 预约弹窗 -->
-  <van-popup v-model:show="showBook" position="bottom" round :style="{ minHeight: '40%' }">
+  <van-popup v-model:show="showBook" position="bottom" round :style="{ minHeight: '45%' }">
     <div style="padding:20px;">
       <div style="font-size:16px;font-weight:600;margin-bottom:16px;">预约 {{ bookGood?.title }}</div>
-      <van-cell-group inset>
-        <van-field v-model="bookForm.phone" label="手机号" placeholder="请输入手机号" type="tel" />
-        <van-field v-model="bookForm.address" label="地址" placeholder="请输入服务地址" />
-        <van-field v-model="bookForm.time" label="预约时间" placeholder="如: 2026-04-16 14:00" />
-      </van-cell-group>
-      <van-button type="primary" block round style="margin-top:16px;" @click="submitOrder"
-                  :disabled="!bookForm.phone || !bookForm.address">
+      <div style="margin-bottom:12px;">
+        <div style="font-size:13px;color:#666;margin-bottom:4px;">手机号 *</div>
+        <input v-model="bookForm.phone" type="tel" placeholder="请输入手机号" style="width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:14px;outline:none;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:13px;color:#666;margin-bottom:4px;">服务地址 *</div>
+        <input v-model="bookForm.address" placeholder="请输入服务地址" style="width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:14px;outline:none;">
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:13px;color:#666;margin-bottom:4px;">预约时间</div>
+        <input v-model="bookForm.time" placeholder="如: 2026-04-16 14:00" style="width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:14px;outline:none;">
+      </div>
+      <van-button type="primary" block round @click="submitOrder" :loading="submitting" :disabled="!bookForm.phone || !bookForm.address">
         确认预约 · ¥{{ ((bookGood?.price||0)/100).toFixed(0) }}
       </van-button>
     </div>
@@ -238,6 +244,7 @@ const app = createApp({
     const showDetail = ref(false);
     const detailGood = ref(null);
     const detailImages = ref([]);
+    const submitting = ref(false);
     let pollTimer = null;
 
     const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
@@ -284,16 +291,56 @@ const app = createApp({
       showBook.value = true;
     }
     async function submitOrder() {
+      if (submitting.value) return;
+      submitting.value = true;
       try {
-        await api('/orders', {
+        const res = await api('/pay/create', {
           method: 'POST',
-          body: JSON.stringify({ good_id: bookGood.value.id, ...bookForm.value })
+          body: JSON.stringify({
+            good_id: bookGood.value.id,
+            phone: bookForm.value.phone,
+            address: bookForm.value.address,
+            appointment_time: bookForm.value.time,
+          }),
         });
+
+        if (res.mock) {
+          // Mock 模式：直接成功
+          showBook.value = false;
+          vant.showToast('预约成功');
+          loadOrders();
+          activeTab.value = 1;
+          return;
+        }
+
+        // 真实支付：调 wx.requestPayment
+        const payParams = res.pay_params;
+        await new Promise((resolve, reject) => {
+          wx.requestPayment({
+            appId: payParams.appId,
+            timeStamp: payParams.timeStamp,
+            nonceStr: payParams.nonceStr,
+            package: payParams.package,
+            signType: payParams.signType,
+            paySign: payParams.paySign,
+            success: resolve,
+            fail: reject,
+          });
+        });
+
         showBook.value = false;
-        vant.showToast('预约成功');
+        vant.showToast('支付成功');
         loadOrders();
         activeTab.value = 1;
-      } catch (e) { vant.showToast('预约失败: ' + e.message); }
+      } catch (e) {
+        if (e.errMsg && e.errMsg.includes('cancel')) {
+          vant.showToast('已取消支付');
+        } else {
+          vant.showToast('预约失败: ' + (e.message || e.errMsg || e));
+        }
+      } finally {
+        submitting.value = false;
+      }
     }
     function openChat(order) {
       currentOrder.value = order;
@@ -334,7 +381,7 @@ const app = createApp({
 
     return {
       ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
-      chatBox, showBook, bookGood, bookForm, unreadCount,
+      chatBox, showBook, bookGood, bookForm, unreadCount, submitting,
       showDetail, detailGood, detailImages,
       openBook, submitOrder, openChat, sendMessage, openDetail, previewImage,
       statusText, statusColor, roleLabel

@@ -224,6 +224,88 @@ async def upload_image(
 
 
 # ============================================================
+# 支付
+# ============================================================
+
+from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify
+
+
+@app.post("/pay/create")
+async def pay_create(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """创建预支付订单：先创建 UNPAID 订单，再发起支付"""
+    body = await request.json()
+    good_id = body.get("good_id")
+    phone = body.get("phone", "")
+    address = body.get("address", "")
+    appointment_time = body.get("appointment_time", "")
+
+    result = await db.execute(select(Good).where(Good.id == good_id, Good.is_active == True))
+    good = result.scalar_one_or_none()
+    if not good:
+        raise HTTPException(404, "商品不存在")
+
+    # 创建 UNPAID 订单
+    order = Order(
+        customer_id=user.id,
+        phone=phone,
+        address=address,
+        appointment_time=appointment_time,
+        total_fee=good.price,
+        status=OrderStatus.UNPAID,
+    )
+    db.add(order)
+    await db.commit()
+    await db.refresh(order)
+
+    # Mock 模式：直接标记为已支付
+    if settings.PAY_MOCK:
+        order.status = OrderStatus.PENDING
+        await db.commit()
+        return {"mock": True, "order_id": order.id, "status": "PAID"}
+
+    # 真实模式：调微信统一下单
+    try:
+        notify_url = str(request.base_url).rstrip("/") + "/pay/notify"
+        prepay_id = await create_prepay_order(
+            order_id=order.id,
+            openid=user.openid,
+            total_fee=good.price,
+            description=good.title[:128],
+            notify_url=notify_url,
+        )
+        pay_params = generate_jsapi_params(prepay_id)
+        return {"mock": False, "order_id": order.id, "pay_params": pay_params}
+    except Exception as e:
+        # 下单失败，删除 UNPAID 订单
+        await db.delete(order)
+        await db.commit()
+        raise HTTPException(500, f"支付下单失败: {e}")
+
+
+@app.post("/pay/notify")
+async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
+    """微信支付结果回调通知"""
+    body = (await request.body()).decode("utf-8")
+    data = verify_pay_notify(body)
+    if not data:
+        return Response(content="<xml><return_code><![CDATA[FAIL]]></return_code></xml>", media_type="application/xml")
+
+    if data.get("result_code") == "SUCCESS":
+        order_id = data.get("out_trade_no", "")
+        result = await db.execute(select(Order).where(Order.id == order_id))
+        order = result.scalar_one_or_none()
+        if order and order.status == OrderStatus.UNPAID:
+            order.status = OrderStatus.PENDING
+            await db.commit()
+
+    return Response(content="<xml><return_code><![CDATA[SUCCESS]]></return_code></xml>", media_type="application/xml")
+
+
+# ============================================================
 # 订单
 # ============================================================
 
