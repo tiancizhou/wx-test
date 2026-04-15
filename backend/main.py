@@ -381,6 +381,14 @@ async def service_page():
     return FileResponse(FRONTEND_DIR / "service.html")
 
 
+# ============================================================
+# 静态文件（微信域名验证等）
+# ============================================================
+
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)
