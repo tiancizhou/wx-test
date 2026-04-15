@@ -297,6 +297,24 @@ async def get_me(user: User = Depends(get_current_user)):
 
 
 # ============================================================
+# 本地测试：绕过 OAuth 直接登录
+# ============================================================
+
+@app.post("/test/login")
+async def test_login(role: str = "CUSTOMER", db: AsyncSession = Depends(get_db)):
+    """本地测试用：创建/获取测试用户，返回 token"""
+    openid = f"test_{role.lower()}"
+    result = await db.execute(select(User).where(User.openid == openid))
+    user = result.scalar_one_or_none()
+    if not user:
+        user = User(openid=openid, role=role, nickname=f"测试{role}")
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    return {"token": openid, "user": UserOut.model_validate(user)}
+
+
+# ============================================================
 # 微信网页授权
 # ============================================================
 
