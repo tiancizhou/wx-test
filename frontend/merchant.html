@@ -103,8 +103,9 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
 </div>
 
 <script>
-const WX_APP_ID = 'wx418d84117fe16bcc';
+const WX_APP_ID = 'wx9e7f92a7fad7e40f';
 const WX_OAUTH_BASE = 'https://open.weixin.qq.com/connect/oauth2/authorize';
+const BASE_URL = 'https://wx.qlc.xn--6qq986b3xl';
 
 async function wxLogin() {
   const token = localStorage.getItem('wx_token');
@@ -121,7 +122,7 @@ async function wxLogin() {
       return data.token;
     }
   }
-  const redirectUri = encodeURIComponent(location.href.split('?')[0]);
+  const redirectUri = encodeURIComponent(BASE_URL + location.pathname);
   location.href = `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_base&state=merchant#wechat_redirect`;
 }
 

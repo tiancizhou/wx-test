@@ -99,6 +99,31 @@ async def wechat_message(request: Request, db: AsyncSession = Depends(get_db)):
 </xml>"""
             return Response(content=reply, media_type="application/xml")
 
+        elif event == "user_authorization_revoke":
+            # 用户撤回授权：清理用户敏感信息
+            result = await db.execute(select(User).where(User.openid == from_user))
+            user = result.scalar_one_or_none()
+            if user:
+                user.nickname = None
+                user.phone = None
+                await db.commit()
+
+        elif event == "user_authorization_cancellation":
+            # 用户注销：删除用户数据
+            result = await db.execute(select(User).where(User.openid == from_user))
+            user = result.scalar_one_or_none()
+            if user:
+                await db.delete(user)
+                await db.commit()
+
+        elif event == "user_info_modified":
+            # 用户资料变更：清除缓存的昵称等信息
+            result = await db.execute(select(User).where(User.openid == from_user))
+            user = result.scalar_one_or_none()
+            if user:
+                user.nickname = None
+                await db.commit()
+
     return Response(content="success", media_type="text/plain")
 
 
@@ -336,6 +361,10 @@ async def wechat_auth(code: str, db: AsyncSession = Depends(get_db)):
     openid = data.get("openid")
     if not openid:
         raise HTTPException(400, "微信授权失败")
+
+    # 快照页虚拟账号处理
+    if data.get("is_snapshotuser") == 1:
+        raise HTTPException(403, "当前为快照页模式，请点击「访问完整网页」后重试")
 
     result = await db.execute(select(User).where(User.openid == openid))
     user = result.scalar_one_or_none()
