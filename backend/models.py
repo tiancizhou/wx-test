@@ -59,6 +59,7 @@ class Order(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_generate_order_id)
     customer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    good_id: Mapped[int] = mapped_column(ForeignKey("goods.id"), default=0)
     phone: Mapped[str] = mapped_column(String(20), default="")
     address: Mapped[str] = mapped_column(String(256), default="")
     appointment_time: Mapped[str] = mapped_column(String(32), default="")
@@ -67,6 +68,7 @@ class Order(Base):
     create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
 
     customer: Mapped["User"] = relationship(back_populates="orders")
+    good: Mapped["Good"] = relationship()
     chat_logs: Mapped[list["ChatLog"]] = relationship(back_populates="order", order_by="ChatLog.create_time")
 
 

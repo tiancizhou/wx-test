@@ -53,12 +53,16 @@ class OrderCreate(BaseModel):
 class OrderOut(BaseModel):
     id: str
     customer_id: int
+    good_id: int = 0
     phone: str
     address: str
     appointment_time: str
     total_fee: int
     status: int
     create_time: int
+    good_title: str = ""
+    good_img_url: str = ""
+    good_duration: int = 0
 
     class Config:
         from_attributes = True

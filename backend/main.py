@@ -11,12 +11,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, init_db
 from models import User, Good, Order, OrderStatus, ChatLog, Role
 from schemas import GoodOut, GoodUpdate, GoodCreate, OrderCreate, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
 from deps import get_current_user, require_role
+
+
+def _order_to_out(order: Order) -> dict:
+    """将 Order ORM 对象转为带商品信息的字典"""
+    good = order.good
+    return {
+        "id": order.id,
+        "customer_id": order.customer_id,
+        "good_id": order.good_id,
+        "phone": order.phone,
+        "address": order.address,
+        "appointment_time": order.appointment_time,
+        "total_fee": order.total_fee,
+        "status": order.status,
+        "create_time": order.create_time,
+        "good_title": good.title if good else "",
+        "good_img_url": good.img_url if good else "",
+        "good_duration": good.duration if good else 0,
+    }
 from wechat.config import settings
 from wechat.token import get_jssdk_signature
 from wechat.menu import create_menu as wx_create_menu
@@ -251,6 +271,7 @@ async def pay_create(
     # 创建 UNPAID 订单
     order = Order(
         customer_id=user.id,
+        good_id=good.id,
         phone=phone,
         address=address,
         appointment_time=appointment_time,
@@ -340,9 +361,10 @@ async def my_orders(
     user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(Order).where(Order.customer_id == user.id).order_by(Order.create_time.desc())
+        select(Order).options(selectinload(Order.good))
+        .where(Order.customer_id == user.id).order_by(Order.create_time.desc())
     )
-    return result.scalars().all()
+    return [_order_to_out(o) for o in result.scalars().all()]
 
 
 @app.get("/orders/pending", response_model=list[OrderOut])
@@ -351,9 +373,10 @@ async def pending_orders(
     user: User = Depends(require_role(Role.MERCHANT, Role.SERVICE, Role.ADMIN)),
 ):
     result = await db.execute(
-        select(Order).where(Order.status == OrderStatus.PENDING).order_by(Order.create_time.desc())
+        select(Order).options(selectinload(Order.good))
+        .where(Order.status == OrderStatus.PENDING).order_by(Order.create_time.desc())
     )
-    return result.scalars().all()
+    return [_order_to_out(o) for o in result.scalars().all()]
 
 
 @app.get("/orders/active", response_model=list[OrderOut])
@@ -362,10 +385,11 @@ async def active_orders(
     user: User = Depends(require_role(Role.MERCHANT, Role.SERVICE, Role.ADMIN)),
 ):
     result = await db.execute(
-        select(Order).where(Order.status.in_([OrderStatus.PENDING, OrderStatus.ACCEPTED]))
+        select(Order).options(selectinload(Order.good))
+        .where(Order.status.in_([OrderStatus.PENDING, OrderStatus.ACCEPTED]))
         .order_by(Order.create_time.desc())
     )
-    return result.scalars().all()
+    return [_order_to_out(o) for o in result.scalars().all()]
 
 
 @app.post("/orders/{order_id}/accept")
