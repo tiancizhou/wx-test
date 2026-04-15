@@ -99,8 +99,8 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
         <span style="font-weight:600;">订单详情</span>
         <span class="order-status" :style="{background: statusColor(currentOrder.status),marginLeft:'auto'}">{{ statusText(currentOrder.status) }}</span>
       </div>
-      <!-- 商品信息 -->
-      <div style="background:#fff;padding:12px 14px;border-bottom:1px solid #eee;display:flex;gap:12px;">
+      <!-- 商品信息（可点击查看详情） -->
+      <div @click="viewOrderGood(currentOrder)" style="background:#fff;padding:12px 14px;border-bottom:1px solid #eee;display:flex;gap:12px;cursor:pointer;">
         <img v-if="currentOrder.good_img_url" :src="currentOrder.good_img_url" style="width:70px;height:70px;border-radius:8px;object-fit:cover;flex-shrink:0;">
         <div style="flex:1;min-width:0;">
           <div style="font-size:15px;font-weight:600;">{{ currentOrder.good_title || '商品' }}</div>
@@ -109,6 +109,7 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
             <span style="color:#e74c3c;font-size:16px;font-weight:700;">¥{{ (currentOrder.total_fee/100).toFixed(0) }}</span>
           </div>
         </div>
+        <span style="color:#ccc;align-self:center;font-size:14px;">›</span>
       </div>
       <!-- 预约信息 -->
       <div style="background:#fff;padding:12px 14px;border-bottom:1px solid #eee;">
@@ -409,6 +410,10 @@ const app = createApp({
     function openOrderDetail(order) {
       currentOrder.value = order;
       loadChat(order.id);
+    }
+    function viewOrderGood(order) {
+      const g = goods.value.find(g => g.id === order.good_id);
+      if (g) openDetail(g);
     }
     async function sendMessage() {
       if (!msgInput.value.trim() || !currentOrder.value) return;
