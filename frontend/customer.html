@@ -558,12 +558,14 @@ const app = createApp({
       if (!orders.value.length) { vant.showToast('请先下单后再咨询'); return; }
       const latestOrder = orders.value[0];
       try {
-        await api('/chat', {
+        const sent = await api('/chat', {
           method: 'POST',
           body: JSON.stringify({ order_id: latestOrder.id, content: allMsgInput.value })
         });
         allMsgInput.value = '';
-        await pollAllChat();
+        allMessages.value.push(sent);
+        await nextTick();
+        if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
     }
 
