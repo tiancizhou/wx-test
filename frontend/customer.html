@@ -237,8 +237,8 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <div class="chat-messages" ref="chatBox">
         <div v-if="!messages.length" class="empty-state" style="padding:40px 0;">暂无消息</div>
         <div v-for="m in messages" :key="m.id"
-             :class="['bubble', 'chat-bubble-col', m.sender_id === userId ? 'bubble-right' : 'bubble-left']">
-          <div v-if="m.sender_id !== userId" class="bubble-role">{{ roleLabel(m.sender_role) }}</div>
+             :class="['bubble', 'chat-bubble-col', m.sender_role === user.role ? 'bubble-right' : 'bubble-left']">
+          <div v-if="m.sender_role !== user.role" class="bubble-role">{{ roleLabel(m.sender_role) }}</div>
           <div>{{ m.content }}</div>
           <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
         </div>
@@ -279,8 +279,8 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <div class="chat-messages" ref="convChatBox">
         <div v-if="!convMessages.length" class="empty-state" style="padding:40px 0;">暂无消息</div>
         <div v-for="m in convMessages" :key="m.id"
-             :class="['bubble', 'chat-bubble-col', m.sender_id === userId ? 'bubble-right' : 'bubble-left']">
-          <div v-if="m.sender_id !== userId" class="bubble-role">{{ roleLabel(m.sender_role) }}</div>
+             :class="['bubble', 'chat-bubble-col', m.sender_role === user.role ? 'bubble-right' : 'bubble-left']">
+          <div v-if="m.sender_role !== user.role" class="bubble-role">{{ roleLabel(m.sender_role) }}</div>
           <div>{{ m.content }}</div>
           <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
         </div>
