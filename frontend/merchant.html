@@ -90,30 +90,67 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
   </van-tabbar>
 
   <!-- 订单列表 -->
-  <div v-show="activeTab === 0" style="padding-bottom:60px;">
-    <div style="padding:12px 16px;font-weight:600;font-size:16px;color:var(--text-title);">订单管理</div>
-    <div class="filter-bar">
-      <div :class="['filter-tag', orderFilter === null ? 'active' : '']" @click="orderFilter = null">全部</div>
-      <div :class="['filter-tag', orderFilter === -1 ? 'active' : '']" @click="orderFilter = orderFilter === -1 ? null : -1">咨询</div>
-      <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">待接单</div>
-      <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">进行中</div>
-      <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已完成</div>
-    </div>
-    <div v-if="!filteredOrders.length" style="text-align:center;padding:60px 0;color:var(--text-secondary);font-size:13px;">暂无订单</div>
-    <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openChat(o)">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span v-if="o.unread_count" class="unread-dot"></span>
-          <span style="font-weight:600;color:var(--text-title);">{{ o.good_title || o.id.slice(-8) }}</span>
-        </div>
-        <span class="order-status" :style="{background: o.status === -1 ? '#5b8dd9' : statusColor(o.status)}">{{ o.status === -1 ? '咨询' : statusText(o.status) }}</span>
+  <div v-show="activeTab === 0">
+    <!-- 订单详情视图 -->
+    <div v-if="detailOrder" style="padding-bottom:60px;">
+      <div class="detail-header">
+        <span class="back-arrow" @click="closeOrderDetail">‹</span>
+        <span style="font-weight:600;color:var(--text-title);">订单详情</span>
+        <span class="order-status" :style="{background: detailOrder.status === -1 ? '#5b8dd9' : statusColor(detailOrder.status), marginLeft:'auto'}">{{ detailOrder.status === -1 ? '咨询' : statusText(detailOrder.status) }}</span>
       </div>
-      <div style="font-size:13px;color:var(--text-body);margin-top:6px;">{{ o.phone }}</div>
-      <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">预约: {{ o.appointment_time }}</div>
-      <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ (o.total_fee/100).toFixed(0) }}</div>
-      <div v-if="o.status !== -1" style="margin-top:10px;display:flex;gap:8px;" @click.stop>
-        <van-button v-if="o.status===1" size="small" type="primary" @click="acceptOrder(o.id)">接单</van-button>
-        <van-button v-if="o.status===2" size="small" type="success" @click="completeOrder(o.id)">完成</van-button>
+      <!-- 商品信息 -->
+      <div class="order-detail-card">
+        <div style="display:flex;gap:12px;">
+          <img v-if="detailOrder.good_img_url" :src="detailOrder.good_img_url" style="width:70px;height:70px;border-radius:8px;object-fit:cover;flex-shrink:0;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:15px;font-weight:600;color:var(--text-title);">{{ detailOrder.good_title || '商品' }}</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">{{ detailOrder.good_duration }}分钟</div>
+            <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px;">
+              <span style="color:var(--gold);font-size:16px;font-weight:700;">¥{{ (detailOrder.total_fee/100).toFixed(0) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 用户 & 订单信息 -->
+      <div class="order-detail-card">
+        <div class="order-detail-row"><span class="order-detail-label">订单号</span><span class="order-detail-value" style="font-size:12px;">{{ detailOrder.id }}</span></div>
+        <div class="order-detail-row"><span class="order-detail-label">下单时间</span><span class="order-detail-value">{{ formatTime(detailOrder.create_time) }}</span></div>
+        <div class="order-detail-row"><span class="order-detail-label">客户电话</span><span class="order-detail-value">{{ detailOrder.phone }}</span></div>
+        <div class="order-detail-row"><span class="order-detail-label">预约时间</span><span class="order-detail-value">{{ detailOrder.appointment_time }}</span></div>
+      </div>
+      <!-- 操作按钮 -->
+      <div style="padding:0 10px;display:flex;gap:8px;">
+        <van-button v-if="detailOrder.status===1" size="small" type="primary" @click="acceptOrder(detailOrder.id)" style="flex:1;">接单</van-button>
+        <van-button v-if="detailOrder.status===2" size="small" type="success" @click="completeOrder(detailOrder.id)" style="flex:1;">完成</van-button>
+        <van-button size="small" plain @click="goToChat(detailOrder)" style="flex:1;color:var(--gold);border-color:var(--gold);">进入会话</van-button>
+      </div>
+    </div>
+    <!-- 订单列表视图 -->
+    <div v-else style="padding-bottom:60px;">
+      <div style="padding:12px 16px;font-weight:600;font-size:16px;color:var(--text-title);">订单管理</div>
+      <div class="filter-bar">
+        <div :class="['filter-tag', orderFilter === null ? 'active' : '']" @click="orderFilter = null">全部</div>
+        <div :class="['filter-tag', orderFilter === -1 ? 'active' : '']" @click="orderFilter = orderFilter === -1 ? null : -1">咨询</div>
+        <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">待接单</div>
+        <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">进行中</div>
+        <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已完成</div>
+      </div>
+      <div v-if="!filteredOrders.length" style="text-align:center;padding:60px 0;color:var(--text-secondary);font-size:13px;">暂无订单</div>
+      <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span v-if="o.unread_count" class="unread-dot"></span>
+            <span style="font-weight:600;color:var(--text-title);">{{ o.good_title || o.id.slice(-8) }}</span>
+          </div>
+          <span class="order-status" :style="{background: o.status === -1 ? '#5b8dd9' : statusColor(o.status)}">{{ o.status === -1 ? '咨询' : statusText(o.status) }}</span>
+        </div>
+        <div style="font-size:13px;color:var(--text-body);margin-top:6px;">{{ o.phone }}</div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">预约: {{ o.appointment_time }}</div>
+        <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ (o.total_fee/100).toFixed(0) }}</div>
+        <div v-if="o.status !== -1" style="margin-top:10px;display:flex;gap:8px;" @click.stop>
+          <van-button v-if="o.status===1" size="small" type="primary" @click="acceptOrder(o.id)">接单</van-button>
+          <van-button v-if="o.status===2" size="small" type="success" @click="completeOrder(o.id)">完成</van-button>
+        </div>
       </div>
     </div>
   </div>
@@ -337,6 +374,7 @@ const app = createApp({
     const activeTab = ref(0);
     const orders = ref([]);
     const goods = ref([]);
+    const detailOrder = ref(null);  // 订单详情页
     const currentOrder = ref(null);
     const messages = ref([]);
     const msgInput = ref('');
@@ -422,10 +460,13 @@ const app = createApp({
       }
     }
 
+    function openOrderDetail(o) { detailOrder.value = o; }
+    function closeOrderDetail() { detailOrder.value = null; }
+    function goToChat(order) { detailOrder.value = null; currentOrder.value = order; activeTab.value = 1; loadChat(order.id); }
     function openChat(order) { currentOrder.value = order; activeTab.value = 1; loadChat(order.id); }
     function closeChat() { currentOrder.value = null; messages.value = []; }
-    async function acceptOrder(id) { await api(`/orders/${id}/accept`, { method: 'POST' }); vant.showToast('已接单'); loadOrders(); }
-    async function completeOrder(id) { await api(`/orders/${id}/complete`, { method: 'POST' }); vant.showToast('已完成'); loadOrders(); }
+    async function acceptOrder(id) { await api(`/orders/${id}/accept`, { method: 'POST' }); vant.showToast('已接单'); loadOrders(); detailOrder.value = null; }
+    async function completeOrder(id) { await api(`/orders/${id}/complete`, { method: 'POST' }); vant.showToast('已完成'); loadOrders(); detailOrder.value = null; }
     async function sendMessage() {
       if (!msgInput.value.trim() || !currentOrder.value) return;
       try {
@@ -531,9 +572,9 @@ const app = createApp({
     onUnmounted(() => clearInterval(pollTimer));
 
     return {
-      ready, activeTab, orders, filteredOrders, orderFilter, conversations, goods, currentOrder, messages, msgInput, chatBox,
+      ready, activeTab, orders, filteredOrders, orderFilter, conversations, goods, detailOrder, currentOrder, messages, msgInput, chatBox,
       showGoodForm, isEditGood, savingGood, goodForm,
-      openChat, closeChat, acceptOrder, completeOrder, sendMessage,
+      openOrderDetail, closeOrderDetail, goToChat, openChat, closeChat, acceptOrder, completeOrder, sendMessage,
       openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,
       uploadCover, uploadDetail, removeDetailImg,
       unreadCount, statusText, statusColor, roleLabel, formatTime
