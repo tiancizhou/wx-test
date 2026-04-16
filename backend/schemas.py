@@ -43,6 +43,10 @@ class GoodCreate(BaseModel):
 
 
 # ---- Order ----
+class ConsultCreate(BaseModel):
+    good_id: int
+
+
 class OrderCreate(BaseModel):
     good_id: int
     phone: str

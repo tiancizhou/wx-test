@@ -16,10 +16,11 @@ class Role(str):
 
 
 class OrderStatus(IntEnum):
-    UNPAID = 0      # 待支付
-    PENDING = 1     # 待接单
-    ACCEPTED = 2    # 已接单
-    COMPLETED = 3   # 已完成
+    CONSULTATION = -1   # 咨询（未下单）
+    UNPAID = 0          # 待支付
+    PENDING = 1         # 待接单
+    ACCEPTED = 2        # 已接单
+    COMPLETED = 3       # 已完成
 
 
 class User(Base):
