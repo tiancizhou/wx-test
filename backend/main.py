@@ -327,7 +327,7 @@ async def pay_create(
 
 @app.post("/pay/notify")
 async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
-    """微信支付 V3 结果回调通知（JSON 格式）"""
+    """微信支付 V3 支付成功回调通知"""
     body = (await request.body()).decode("utf-8")
     timestamp = request.headers.get("Wechatpay-Timestamp", "")
     nonce = request.headers.get("Wechatpay-Nonce", "")
@@ -335,27 +335,36 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
 
     data = verify_pay_notify(timestamp, nonce, body, signature)
     if not data:
-        return JSONResponse({"code": "FAIL", "message": "验签失败"}, status_code=400)
+        return JSONResponse({"code": "FAIL", "message": "解密失败"}, status_code=400)
 
-    # V3 回调数据结构：{"event_type":"TRANSACTION.SUCCESS","resource":{...}}
+    if data.get("event_type") != "TRANSACTION.SUCCESS":
+        return Response(status_code=200)
+
     resource = data.get("resource", {})
-    if data.get("event_type") == "TRANSACTION.SUCCESS" or resource.get("trade_state") == "SUCCESS":
-        order_id = resource.get("out_trade_no", "")
-        if not order_id:
-            return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
+    if resource.get("trade_state") != "SUCCESS":
+        return Response(status_code=200)
 
-        result = await db.execute(
-            select(Order).where(Order.id == order_id).options(selectinload(Order.good))
-        )
-        order = result.scalar_one_or_none()
-        if order and order.status == OrderStatus.UNPAID:
-            order.status = OrderStatus.PENDING
-            order.transaction_id = resource.get("transaction_id", "")
-            if order.good:
-                order.good.sales += order.quantity or 1
-            await db.commit()
+    order_id = resource.get("out_trade_no", "")
+    if not order_id:
+        return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
 
-    return JSONResponse({"code": "SUCCESS", "message": ""})
+    # 幂等：重复回调直接返回成功
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.good))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        return JSONResponse({"code": "FAIL", "message": "订单不存在"}, status_code=404)
+
+    if order.status == OrderStatus.UNPAID:
+        order.status = OrderStatus.PENDING
+        order.transaction_id = resource.get("transaction_id", "")
+        if order.good:
+            order.good.sales += order.quantity or 1
+        await db.commit()
+
+    # 成功：200 无 body
+    return Response(status_code=200)
 
 
 @app.post("/pay/query/{order_id}")
@@ -427,22 +436,26 @@ async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
         return JSONResponse({"code": "FAIL", "message": "解密失败"}, status_code=400)
 
     resource = data.get("resource", {})
-    order_id = resource.get("out_trade_no", "")
     refund_status = resource.get("refund_status", "")
 
     if refund_status == "SUCCESS":
+        order_id = resource.get("out_trade_no", "")
+        if not order_id:
+            return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
+
         result = await db.execute(
             select(Order).where(Order.id == order_id).options(selectinload(Order.good))
         )
         order = result.scalar_one_or_none()
-        if order:
+        if order and order.status == OrderStatus.REFUNDING:
             order.status = OrderStatus.REFUNDED
             order.refund_id = resource.get("refund_id", order.refund_id)
             if order.good:
                 order.good.sales = max(0, order.good.sales - (order.quantity or 1))
             await db.commit()
 
-    return JSONResponse({"code": "SUCCESS", "message": ""})
+    # 成功：200 无 body
+    return Response(status_code=200)
 
 @app.post("/orders", response_model=OrderOut)
 async def create_order(
