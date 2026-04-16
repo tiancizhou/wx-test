@@ -462,6 +462,37 @@ async def complete_order(
 # 聊天
 # ============================================================
 
+@app.get("/chat/conversations")
+async def get_conversations(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """客户：获取订单会话列表（按最后消息时间倒序）"""
+    order_result = await db.execute(
+        select(Order).options(selectinload(Order.good))
+        .where(Order.customer_id == user.id)
+    )
+    conversations = []
+    for order in order_result.scalars().all():
+        last_msg = await db.execute(
+            select(ChatLog)
+            .where(ChatLog.order_id == order.id)
+            .order_by(ChatLog.id.desc()).limit(1)
+        )
+        msg = last_msg.scalar_one_or_none()
+        if msg:
+            conversations.append({
+                "order_id": order.id,
+                "good_title": order.good.title if order.good else "商品",
+                "good_img_url": order.good.img_url if order.good else "",
+                "last_content": msg.content[:50],
+                "last_time": msg.create_time,
+                "status": order.status,
+            })
+    conversations.sort(key=lambda x: x["last_time"], reverse=True)
+    return conversations
+
+
 @app.get("/chat/{order_id}", response_model=list[ChatLogOut])
 async def get_chat(
     order_id: str,
@@ -494,37 +525,6 @@ async def send_chat(
     await db.refresh(log)
     return log
 
-
-
-@app.get("/chat/conversations")
-async def get_conversations(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """客户：获取订单会话列表（按最后消息时间倒序）"""
-    order_result = await db.execute(
-        select(Order).options(selectinload(Order.good))
-        .where(Order.customer_id == user.id)
-    )
-    conversations = []
-    for order in order_result.scalars().all():
-        last_msg = await db.execute(
-            select(ChatLog)
-            .where(ChatLog.order_id == order.id)
-            .order_by(ChatLog.id.desc()).limit(1)
-        )
-        msg = last_msg.scalar_one_or_none()
-        if msg:
-            conversations.append({
-                "order_id": order.id,
-                "good_title": order.good.title if order.good else "商品",
-                "good_img_url": order.good.img_url if order.good else "",
-                "last_content": msg.content[:50],
-                "last_time": msg.create_time,
-                "status": order.status,
-            })
-    conversations.sort(key=lambda x: x["last_time"], reverse=True)
-    return conversations
 
 
 # ============================================================
