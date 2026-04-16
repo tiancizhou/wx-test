@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>到店按摩</title>
 <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
 <script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
@@ -649,6 +652,9 @@ const app = createApp({
         }
 
         // 真实支付：调 WeixinJSBridge 公众号支付
+        if (typeof WeixinJSBridge === 'undefined') {
+          throw new Error('微信支付环境异常，请在微信中打开');
+        }
         const payParams = res.pay_params;
         await new Promise((resolve, reject) => {
           WeixinJSBridge.invoke(
@@ -856,6 +862,14 @@ const app = createApp({
     });
 
     onUnmounted(() => clearInterval(pollTimer));
+
+    // iOS WKWebView: pages from back-forward cache need polling restart
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted && ready.value) {
+        clearInterval(pollTimer);
+        pollTimer = setInterval(pollChat, 5000);
+      }
+    });
 
     return {
       ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,

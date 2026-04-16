@@ -879,31 +879,38 @@ async def update_contact_config(
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
+NO_CACHE_HEADERS = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+
+
+def _html(path: Path):
+    """返回 HTML 页面，禁止缓存（iOS WKWebView 适配）"""
+    return FileResponse(path, headers=NO_CACHE_HEADERS)
+
 
 @app.get("/")
 async def index_page():
     """统一入口：OAuth 登录后根据角色跳转"""
-    return FileResponse(FRONTEND_DIR / "index.html")
+    return _html(FRONTEND_DIR / "index.html")
 
 
 @app.get("/customer")
 async def customer_page():
-    return FileResponse(FRONTEND_DIR / "customer.html")
+    return _html(FRONTEND_DIR / "customer.html")
 
 
 @app.get("/merchant")
 async def merchant_page():
-    return FileResponse(FRONTEND_DIR / "merchant.html")
+    return _html(FRONTEND_DIR / "merchant.html")
 
 
 @app.get("/service")
 async def service_page():
-    return FileResponse(FRONTEND_DIR / "service.html")
+    return _html(FRONTEND_DIR / "service.html")
 
 
 @app.get("/admin")
 async def admin_page():
-    return FileResponse(FRONTEND_DIR / "admin.html")
+    return _html(FRONTEND_DIR / "admin.html")
 
 
 # ============================================================
