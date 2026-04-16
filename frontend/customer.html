@@ -205,15 +205,33 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     </div>
   </div>
 
-  <!-- 消息Tab：独立消息入口 -->
-  <div v-show="activeTab === 2" style="padding-bottom:60px;">
-    <div v-if="!orders.length" style="text-align:center;padding:60px 0;color:#787890;">暂无消息</div>
-    <div v-for="o in orders" :key="'msg-'+o.id" class="order-card" @click="openOrderDetail(o); activeTab=1">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-weight:600;color:#ffffff;">订单 {{ o.id.slice(-8) }}</span>
-        <span style="font-size:12px;color:#787890;">{{ statusText(o.status) }}</span>
+  <!-- 消息Tab：统一商家聊天 -->
+  <div v-show="activeTab === 2">
+    <div v-if="!chatActive" style="padding-bottom:60px;">
+      <div class="order-card" @click="openChat" style="text-align:center;padding:40px 14px;">
+        <div style="font-size:40px;">💬</div>
+        <div style="font-size:16px;font-weight:600;color:#ffffff;margin-top:10px;">联系商家</div>
+        <div style="font-size:13px;color:#787890;margin-top:4px;">点击进入客服对话</div>
       </div>
-      <div style="font-size:13px;color:#b0b0c0;margin-top:6px;">{{ o.phone }} · {{ o.appointment_time }}</div>
+    </div>
+    <div v-else class="chat-wrap">
+      <div class="detail-header">
+        <span class="back-arrow" @click="closeChat">‹</span>
+        <span style="font-weight:600;color:#ffffff;">商家客服</span>
+      </div>
+      <div class="chat-messages" ref="allChatBox">
+        <div v-if="!allMessages.length" style="text-align:center;padding:40px 0;color:#787890;font-size:13px;">暂无消息</div>
+        <div v-for="m in allMessages" :key="m.id"
+             :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left']"
+             style="display:flex;flex-direction:column;">
+          <div class="bubble-role">{{ roleLabel(m.sender_role) }}</div>
+          <div>{{ m.content }}</div>
+        </div>
+      </div>
+      <div class="chat-input-bar">
+        <input v-model="allMsgInput" placeholder="输入消息..." @keyup.enter="sendAllChat">
+        <button @click="sendAllChat">发送</button>
+      </div>
     </div>
   </div>
 
