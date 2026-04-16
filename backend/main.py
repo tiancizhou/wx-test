@@ -299,7 +299,9 @@ async def upload_image(
 
 async def _verify_order_access(order_id: str, user: User, db: AsyncSession) -> Order:
     """校验订单存在性及当前用户是否有权访问。商家可访问所有订单，客户只能访问自己的。"""
-    result = await db.execute(select(Order).where(Order.id == order_id))
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.good))
+    )
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "订单不存在")
@@ -473,12 +475,6 @@ async def pay_refund(
 ):
     """申请退款"""
     order = await _verify_order_access(order_id, user, db)
-    # 重新加载关联的 good
-    if order.good is None:
-        result = await db.execute(
-            select(Order).where(Order.id == order_id).options(selectinload(Order.good))
-        )
-        order = result.scalar_one()
     if order.status not in (OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.COMPLETED):
         raise HTTPException(400, "订单状态不支持退款")
 
