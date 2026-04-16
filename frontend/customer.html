@@ -206,32 +206,22 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
   </div>
 
   <!-- 消息Tab：统一商家聊天 -->
-  <div v-show="activeTab === 2">
-    <div v-if="!chatActive" style="padding-bottom:60px;">
-      <div class="order-card" @click="openChat" style="text-align:center;padding:40px 14px;">
-        <div style="font-size:40px;">💬</div>
-        <div style="font-size:16px;font-weight:600;color:#ffffff;margin-top:10px;">联系商家</div>
-        <div style="font-size:13px;color:#787890;margin-top:4px;">点击进入客服对话</div>
+  <div v-show="activeTab === 2" class="chat-wrap">
+    <div class="detail-header">
+      <span style="font-weight:600;color:#ffffff;font-size:16px;">商家客服</span>
+    </div>
+    <div class="chat-messages" ref="allChatBox">
+      <div v-if="!allMessages.length" style="text-align:center;padding:40px 0;color:#787890;font-size:13px;">暂无消息，发消息开始咨询吧</div>
+      <div v-for="m in allMessages" :key="m.id"
+           :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left']"
+           style="display:flex;flex-direction:column;">
+        <div class="bubble-role">{{ roleLabel(m.sender_role) }} · {{ formatTime(m.create_time) }}</div>
+        <div>{{ m.content }}</div>
       </div>
     </div>
-    <div v-else class="chat-wrap">
-      <div class="detail-header">
-        <span class="back-arrow" @click="closeChat">‹</span>
-        <span style="font-weight:600;color:#ffffff;">商家客服</span>
-      </div>
-      <div class="chat-messages" ref="allChatBox">
-        <div v-if="!allMessages.length" style="text-align:center;padding:40px 0;color:#787890;font-size:13px;">暂无消息</div>
-        <div v-for="m in allMessages" :key="m.id"
-             :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left']"
-             style="display:flex;flex-direction:column;">
-          <div class="bubble-role">{{ roleLabel(m.sender_role) }} · {{ formatTime(m.create_time) }}</div>
-          <div>{{ m.content }}</div>
-        </div>
-      </div>
-      <div class="chat-input-bar">
-        <input v-model="allMsgInput" placeholder="输入消息..." @keyup.enter="sendAllChat">
-        <button @click="sendAllChat">发送</button>
-      </div>
+    <div class="chat-input-bar">
+      <input v-model="allMsgInput" placeholder="输入消息..." @keyup.enter="sendAllChat">
+      <button @click="sendAllChat">发送</button>
     </div>
   </div>
 
@@ -355,7 +345,7 @@ async function wxJSSDKInit() {
   }
 }
 
-const { createApp, ref, onMounted, onUnmounted, nextTick } = Vue;
+const { createApp, ref, watch, onMounted, onUnmounted, nextTick } = Vue;
 
 const app = createApp({
   setup() {
@@ -381,7 +371,6 @@ const app = createApp({
     const detailImages = ref([]);
     const submitting = ref(false);
     const allMessages = ref([]);
-    const chatActive = ref(false);
     const allMsgInput = ref('');
     const allChatBox = ref(null);
 
@@ -433,7 +422,7 @@ const app = createApp({
           await nextTick();
           if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
         }
-      } else if (chatActive.value) {
+      } else if (activeTab.value === 2) {
         await pollAllChat();
       }
     }
@@ -542,7 +531,6 @@ const app = createApp({
       }
     }
     async function pollAllChat() {
-      if (!chatActive.value) return;
       const lastId = allMessages.value.length ? allMessages.value[allMessages.value.length - 1].id : 0;
       const newMsgs = await api('/chat/all?after_id=' + lastId);
       if (newMsgs.length) {
@@ -551,15 +539,10 @@ const app = createApp({
         if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
       }
     }
-    async function openChat() {
-      chatActive.value = true;
-      await nextTick();
-      await loadAllChat();
-    }
-    function closeChat() {
-      chatActive.value = false;
-      // 保留 allMessages，重新打开时用户可立即看到旧记录，openChat 会刷新
-    }
+    // 切换到消息Tab时自动加载聊天记录
+    watch(activeTab, (tab) => {
+      if (tab === 2) loadAllChat();
+    });
     async function sendAllChat() {
       if (!allMsgInput.value.trim()) return;
       if (!orders.value.length) { vant.showToast('请先下单后再咨询'); return; }
@@ -616,9 +599,9 @@ const app = createApp({
       ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
       chatBox, showBook, bookGood, bookForm, submitting,
       showDetail, detailGood, detailImages, timeSlots, dateOptions,
-      allMessages, chatActive, allMsgInput, allChatBox,
+      allMessages, allMsgInput, allChatBox,
       openBook, submitOrder, openOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
-      openChat, closeChat, sendAllChat,
+      sendAllChat,
       statusText, statusColor, roleLabel, formatTime
     };
   }
