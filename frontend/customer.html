@@ -487,13 +487,6 @@ const app = createApp({
     const convMsgInput = ref('');      // 当前会话的输入框
     const convChatBox = ref(null);     // 当前会话的滚动容器 ref
 
-    // ---- 新消息通知 ----
-    const prevConvMsgIds = {}; // { orderId: lastMsgId } 记录上轮各会话最后消息 id
-    function notifyNewMessage(senderRole, content) {
-      const label = senderRole === 'MERCHANT' ? '商家' : senderRole === 'SERVICE' ? '客服' : '对方';
-      vant.showToast({ message: `${label}: ${content.slice(0, 20)}${content.length > 20 ? '...' : ''}`, duration: 3000, icon: 'chat-o' });
-    }
-
     // ---- 未读追踪 ----
     const unreadCount = computed(() => conversations.value.reduce((sum, c) => sum + (c.unread_count || 0), 0));
     async function markRead(orderId) {
@@ -590,11 +583,6 @@ const app = createApp({
         const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
         const newMsgs = await api(`/chat/${currentOrder.value.id}?after_id=${lastId}`);
         if (newMsgs.length) {
-          const fromOther = newMsgs.filter(m => m.sender_id !== userId.value);
-          if (fromOther.length) {
-            const last = fromOther[fromOther.length - 1];
-            notifyNewMessage(last.sender_role, last.content);
-          }
           messages.value.push(...newMsgs);
           orderMessageCache.value[currentOrder.value.id] = [...messages.value];
           markRead(currentOrder.value.id);
@@ -725,21 +713,9 @@ const app = createApp({
         if (nextActive) activeConv.value = nextActive;
       }
     }
-    let convsLoadedOnce = false;
     async function loadConversations() {
       try {
         const list = await api('/chat/conversations');
-        for (const c of list) {
-          if (c.last_msg_id && prevConvMsgIds[c.order_id] !== undefined && c.last_msg_id > prevConvMsgIds[c.order_id]) {
-            const inThisConv = activeConv.value && activeConv.value.order_id === c.order_id;
-            if (!inThisConv) notifyNewMessage(c.last_sender_role || '', c.last_content || '');
-          } else if (!convsLoadedOnce && c.unread_count > 0) {
-            // 页面首次加载时有未读消息，也通知
-            notifyNewMessage(c.last_sender_role || '', c.last_content || '');
-          }
-          prevConvMsgIds[c.order_id] = c.last_msg_id || 0;
-        }
-        convsLoadedOnce = true;
         mergeConversations(list);
       } catch {}
     }
@@ -764,11 +740,6 @@ const app = createApp({
       const lastId = convMessages.value.length ? convMessages.value[convMessages.value.length - 1].id : 0;
       const newMsgs = await api(`/chat/${activeConv.value.order_id}?after_id=${lastId}`);
       if (newMsgs.length) {
-        const fromOther = newMsgs.filter(m => m.sender_id !== userId.value);
-        if (fromOther.length) {
-          const last = fromOther[fromOther.length - 1];
-          notifyNewMessage(last.sender_role, last.content);
-        }
         convMessages.value.push(...newMsgs);
         convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
         markRead(activeConv.value.order_id);
