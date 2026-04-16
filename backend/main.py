@@ -340,7 +340,6 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
     # V3 回调数据结构：{"event_type":"TRANSACTION.SUCCESS","resource":{...}}
     resource = data.get("resource", {})
     if data.get("event_type") == "TRANSACTION.SUCCESS" or resource.get("trade_state") == "SUCCESS":
-        # V3 resource 中包含 out_trade_no（开发阶段直接用 resource，生产需解密）
         order_id = resource.get("out_trade_no", "")
         if not order_id:
             return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
@@ -351,6 +350,7 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
         order = result.scalar_one_or_none()
         if order and order.status == OrderStatus.UNPAID:
             order.status = OrderStatus.PENDING
+            order.transaction_id = resource.get("transaction_id", "")
             if order.good:
                 order.good.sales += order.quantity or 1
             await db.commit()

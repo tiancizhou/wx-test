@@ -11,6 +11,7 @@ class WeChatSettings:
     MCH_ID: str = os.getenv("WX_MCH_ID", "")
     MCH_SERIAL_NO: str = os.getenv("WX_MCH_SERIAL_NO", "")
     MCH_PRIVATE_KEY_PATH: str = os.getenv("WX_MCH_PRIVATE_KEY_PATH", "")
+    API_V3_KEY: str = os.getenv("WX_API_V3_KEY", "")
     PAY_MOCK: bool = os.getenv("WX_PAY_MOCK", "true").lower() == "true"
 
 

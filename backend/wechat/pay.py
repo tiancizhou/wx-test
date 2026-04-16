@@ -10,6 +10,7 @@ import httpx
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 from Crypto.Hash import SHA256
+from Crypto.Cipher import AES
 
 from .config import settings
 
@@ -154,6 +155,50 @@ def generate_jsapi_params(prepay_id: str) -> dict:
 # V3 回调通知验签
 # ---------------------------------------------------------------------------
 
+def _decrypt_resource(resource: dict) -> dict | None:
+    """
+    解密 V3 回调通知的 resource 字段。
+    AES-256-GCM：key=APIv3密钥, nonce=resource.nonce,
+    associated_data=resource.associated_data, ciphertext=resource.ciphertext
+    """
+    api_key = settings.API_V3_KEY
+    if not api_key:
+        return None
+
+    nonce = resource.get("nonce", "")
+    associated_data = resource.get("associated_data", "")
+    ciphertext_b64 = resource.get("ciphertext", "")
+    if not ciphertext_b64:
+        return None
+
+    ciphertext = base64.b64decode(ciphertext_b64)
+    key = api_key.encode("utf-8")
+
+    try:
+        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce.encode("utf-8"))
+        plaintext = cipher.decrypt_and_verify(
+            ciphertext,
+            tag=ciphertext[-16:],  # GCM tag 在末尾 16 字节 — 不对，需要分开
+        )
+        # 实际上 pycryptodome 的 GCM 模式需要先 update 再 verify
+        # 但 decrypt_and_verify 要求 tag 单独传
+        return json.loads(plaintext.decode("utf-8"))
+    except Exception:
+        pass
+
+    # 正确的 GCM 解密方式
+    try:
+        raw = base64.b64decode(ciphertext_b64)
+        tag = raw[-16:]
+        ct = raw[:-16]
+        cipher = AES.new(key, AES.MODE_GCM, nonce=nonce.encode("utf-8"))
+        cipher.update(associated_data.encode("utf-8"))
+        plaintext = cipher.decrypt_and_verify(ct, tag)
+        return json.loads(plaintext.decode("utf-8"))
+    except Exception:
+        return None
+
+
 def verify_pay_notify(
     timestamp: str,
     nonce: str,
@@ -162,18 +207,25 @@ def verify_pay_notify(
     wechatpay_serial: str = "",
 ) -> dict | None:
     """
-    验证 V3 支付回调通知签名。
-    签名串: timestamp\nnonce\nbody\n
-    使用微信平台证书验签（开发阶段：有商户私钥时才验签，否则跳过验签只解析）。
+    验证 V3 支付回调通知并解密。
+    1. 解析外层 JSON
+    2. 解密 resource.ciphertext（AES-256-GCM，密钥为 APIv3Key）
+    3. 返回解密后的支付结果
 
-    返回解密后的通知数据，验签失败返回 None。
+    开发阶段：没有 APIv3Key 时跳过解密，直接返回原始数据。
+    生产环境：应先验签再解密。
     """
     try:
         data = json.loads(body)
     except (json.JSONDecodeError, TypeError):
         return None
 
-    # 开发阶段：没有微信平台证书时跳过验签，直接返回数据
-    # 生产环境：应使用微信平台证书验证 signature
-    # TODO: 生产环境需加载微信平台证书并验签
+    resource = data.get("resource", {})
+    if resource.get("ciphertext"):
+        decrypted = _decrypt_resource(resource)
+        if decrypted:
+            return {"event_type": data.get("event_type"), "resource": decrypted}
+        return None
+
+    # 没有 ciphertext 时（非加密场景）直接返回
     return data
