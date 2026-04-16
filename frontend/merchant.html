@@ -97,7 +97,11 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
 <body>
 <div id="app">
   <div v-if="!ready" class="loading-mask">
-    <van-loading size="36px">正在登录...</van-loading>
+    <van-loading v-if="!loginError" size="36px">正在登录...</van-loading>
+    <div v-else style="text-align:center;">
+      <div style="color:var(--text-body);margin-bottom:16px;">登录失败，请重试</div>
+      <van-button type="primary" round @click="retryLogin">重新登录</van-button>
+    </div>
   </div>
 
   <template v-else>
@@ -125,7 +129,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
             <div style="font-size:15px;font-weight:600;color:var(--text-title);">{{ detailOrder.good_title || '商品' }}</div>
             <div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">{{ detailOrder.good_duration }}分钟</div>
             <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px;">
-              <span style="color:var(--gold);font-size:16px;font-weight:700;">¥{{ (detailOrder.total_fee/100).toFixed(0) }}</span>
+              <span style="color:var(--gold);font-size:16px;font-weight:700;">¥{{ formatPrice(detailOrder.total_fee) }}</span>
               <span v-if="detailOrder.quantity > 1" style="font-size:12px;color:var(--text-secondary);margin-left:4px;">x{{ detailOrder.quantity }}</span>
             </div>
           </div>
@@ -141,9 +145,9 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       </div>
       <!-- 操作按钮 -->
       <div style="padding:0 10px;display:flex;gap:8px;">
-        <van-button v-if="detailOrder.status===1" size="small" type="primary" @click="acceptOrder(detailOrder.id)" style="flex:1;">接单</van-button>
-        <van-button v-if="detailOrder.status===2" size="small" type="success" @click="completeOrder(detailOrder.id)" style="flex:1;">完成</van-button>
-        <van-button v-if="[1,2,3].includes(detailOrder.status)" size="small" type="danger" plain @click="refundOrderAction(detailOrder)" style="flex:1;">退款</van-button>
+        <van-button v-if="detailOrder.status===1" size="small" type="primary" @click="acceptOrder(detailOrder.id)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">接单</van-button>
+        <van-button v-if="detailOrder.status===2" size="small" type="success" @click="completeOrder(detailOrder.id)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">完成</van-button>
+        <van-button v-if="[1,2,3].includes(detailOrder.status)" size="small" type="danger" plain @click="refundOrderAction(detailOrder)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">退款</van-button>
         <van-button size="small" plain @click="goToChat(detailOrder)" style="flex:1;color:var(--gold);border-color:var(--gold);">进入会话</van-button>
       </div>
     </div>
@@ -156,6 +160,8 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">待接单</div>
         <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">进行中</div>
         <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已完成</div>
+        <div :class="['filter-tag', orderFilter === 4 ? 'active' : '']" @click="orderFilter = orderFilter === 4 ? null : 4">退款中</div>
+        <div :class="['filter-tag', orderFilter === 5 ? 'active' : '']" @click="orderFilter = orderFilter === 5 ? null : 5">已退款</div>
       </div>
       <div v-if="!filteredOrders.length" style="text-align:center;padding:60px 0;color:var(--text-secondary);font-size:13px;">暂无订单</div>
       <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
@@ -168,10 +174,10 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         </div>
         <div style="font-size:13px;color:var(--text-body);margin-top:6px;">{{ o.phone }}</div>
         <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">预约: {{ o.appointment_time }}</div>
-        <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ (o.total_fee/100).toFixed(0) }}<span v-if="o.quantity > 1" style="font-size:12px;color:var(--text-secondary);margin-left:4px;">x{{ o.quantity }}</span></div>
+        <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ formatPrice(o.total_fee) }}<span v-if="o.quantity > 1" style="font-size:12px;color:var(--text-secondary);margin-left:4px;">x{{ o.quantity }}</span></div>
         <div v-if="o.status !== -1" style="margin-top:10px;display:flex;gap:8px;" @click.stop>
-          <van-button v-if="o.status===1" size="small" type="primary" @click="acceptOrder(o.id)">接单</van-button>
-          <van-button v-if="o.status===2" size="small" type="success" @click="completeOrder(o.id)">完成</van-button>
+          <van-button v-if="o.status===1" size="small" type="primary" @click="acceptOrder(o.id)" :loading="actionLoading" :disabled="actionLoading">接单</van-button>
+          <van-button v-if="o.status===2" size="small" type="success" @click="completeOrder(o.id)" :loading="actionLoading" :disabled="actionLoading">完成</van-button>
         </div>
       </div>
     </div>
@@ -207,7 +213,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       <!-- 订单详情卡片 -->
       <div class="order-detail-card">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:15px;color:var(--gold);font-weight:700;">¥{{ (currentOrder.total_fee/100).toFixed(0) }}</span>
+          <span style="font-size:15px;color:var(--gold);font-weight:700;">¥{{ formatPrice(currentOrder.total_fee) }}</span>
           <span style="font-size:12px;color:var(--text-secondary);">预约: {{ currentOrder.appointment_time }}</span>
         </div>
         <div class="order-detail-row"><span class="order-detail-label">客户电话</span><span class="order-detail-value">{{ currentOrder.phone }}</span></div>
@@ -249,8 +255,8 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
             <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">{{ g.description || '暂无描述' }}</div>
           </div>
           <div style="display:flex;align-items:baseline;gap:6px;">
-            <span style="color:var(--gold);font-size:17px;font-weight:700;">¥{{ (g.price/100).toFixed(0) }}</span>
-            <span v-if="g.original_price" style="font-size:12px;color:var(--text-secondary);text-decoration:line-through;">¥{{ (g.original_price/100).toFixed(0) }}</span>
+            <span style="color:var(--gold);font-size:17px;font-weight:700;">¥{{ formatPrice(g.price) }}</span>
+            <span v-if="g.original_price" style="font-size:12px;color:var(--text-secondary);text-decoration:line-through;">¥{{ formatPrice(g.original_price) }}</span>
             <span style="font-size:12px;color:var(--text-secondary);margin-left:auto;">{{ g.duration }}分钟</span>
           </div>
           <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">已售 {{ g.sales || 0 }}</div>
@@ -279,7 +285,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       <div class="stat-grid">
         <div class="stat-card">
           <div class="stat-label">营收</div>
-          <div class="stat-value">¥{{ (stats.today.revenue/100).toFixed(0) }}</div>
+          <div class="stat-value">¥{{ formatPrice(stats.today.revenue) }}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">订单数</div>
@@ -291,7 +297,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         </div>
         <div class="stat-card">
           <div class="stat-label">客单价</div>
-          <div class="stat-value">¥{{ (stats.today.avg_fee/100).toFixed(0) }}</div>
+          <div class="stat-value">¥{{ formatPrice(stats.today.avg_fee) }}</div>
         </div>
       </div>
 
@@ -300,13 +306,13 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       <div class="stat-grid">
         <div class="stat-card">
           <div class="stat-label">营收</div>
-          <div class="stat-value.small">¥{{ (stats.month.revenue/100).toFixed(0) }}</div>
+          <div class="stat-value.small">¥{{ formatPrice(stats.month.revenue) }}</div>
           <div class="stat-sub">{{ stats.month.order_count }} 笔订单</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">客户数</div>
           <div class="stat-value.small">{{ stats.month.customers }}</div>
-          <div class="stat-sub">客单价 ¥{{ (stats.month.avg_fee/100).toFixed(0) }}</div>
+          <div class="stat-sub">客单价 ¥{{ formatPrice(stats.month.avg_fee) }}</div>
         </div>
       </div>
 
@@ -333,7 +339,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
           <span :class="['stat-rank-num', idx < 3 ? 'top' : 'normal']">{{ idx + 1 }}</span>
           <div style="flex:1;min-width:0;">
             <div style="font-size:14px;color:var(--text-title);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ g.title }}</div>
-            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">销量 {{ g.sales }} · ¥{{ (g.revenue/100).toFixed(0) }}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">销量 {{ g.sales }} · ¥{{ formatPrice(g.revenue) }}</div>
           </div>
         </div>
       </div>
@@ -416,9 +422,21 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
 </div>
 
 <script>
-const WX_APP_ID = 'wx9e7f92a7fad7e40f';
+// ---- 前端配置 ----
+let WX_APP_ID = 'wx9e7f92a7fad7e40f';
+let BASE_URL = 'https://wx.qlc.xn--6qq986b3xl';
 const WX_OAUTH_BASE = 'https://open.weixin.qq.com/connect/oauth2/authorize';
-const BASE_URL = 'https://wx.qlc.xn--6qq986b3xl';
+
+async function initConfig() {
+  try {
+    const res = await fetch('/config/frontend');
+    if (res.ok) {
+      const cfg = await res.json();
+      if (cfg.app_id) WX_APP_ID = cfg.app_id;
+      if (cfg.base_url) BASE_URL = cfg.base_url;
+    }
+  } catch {}
+}
 
 async function wxLogin() {
   const token = localStorage.getItem('wx_token');
@@ -457,9 +475,16 @@ const app = createApp({
     const TOKEN = () => localStorage.getItem('wx_token') || '';
     const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
     const ready = ref(false);
+    const loginError = ref(false);
+    const actionLoading = ref(false);
 
     async function api(path, opts = {}) {
       const res = await fetch(API + path, { headers: headers(), ...opts });
+      if (res.status === 401) {
+        localStorage.removeItem('wx_token');
+        location.reload();
+        throw new Error('登录已过期');
+      }
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -558,7 +583,7 @@ const app = createApp({
       messages.value = await api(`/chat/${orderId}?after_id=0`);
       if (messages.value.length) markRead(orderId);
       await nextTick();
-      if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+      if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
     }
     async function pollChat() {
       if (!currentOrder.value) return;
@@ -568,7 +593,7 @@ const app = createApp({
         messages.value.push(...newMsgs);
         markRead(currentOrder.value.id);
         await nextTick();
-        if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+        if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
       }
     }
 
@@ -577,16 +602,26 @@ const app = createApp({
     function goToChat(order) { detailOrder.value = null; currentOrder.value = order; activeTab.value = 1; loadChat(order.id); }
     function openChat(order) { currentOrder.value = order; activeTab.value = 1; loadChat(order.id); }
     function closeChat() { currentOrder.value = null; messages.value = []; }
-    async function acceptOrder(id) { await api(`/orders/${id}/accept`, { method: 'POST' }); vant.showToast('已接单'); loadOrders(); detailOrder.value = null; }
-    async function completeOrder(id) { await api(`/orders/${id}/complete`, { method: 'POST' }); vant.showToast('已完成'); loadOrders(); detailOrder.value = null; }
+    async function acceptOrder(id) {
+      actionLoading.value = true;
+      try { await api(`/orders/${id}/accept`, { method: 'POST' }); vant.showToast('已接单'); loadOrders(); detailOrder.value = null; }
+      finally { actionLoading.value = false; }
+    }
+    async function completeOrder(id) {
+      actionLoading.value = true;
+      try { await api(`/orders/${id}/complete`, { method: 'POST' }); vant.showToast('已完成'); loadOrders(); detailOrder.value = null; }
+      finally { actionLoading.value = false; }
+    }
     async function refundOrderAction(order) {
       try { await vant.showConfirmDialog({ title: '确认退款', message: '确认对该订单进行退款？' }); } catch { return; }
+      actionLoading.value = true;
       try {
         await api(`/pay/refund/${order.id}`, { method: 'POST', body: JSON.stringify({}) });
         vant.showToast('退款申请已提交');
         loadOrders();
         detailOrder.value = null;
       } catch (e) { vant.showToast('退款失败: ' + (e.message || e)); }
+      finally { actionLoading.value = false; }
     }
     async function sendMessage() {
       if (!msgInput.value.trim() || !currentOrder.value) return;
@@ -596,7 +631,7 @@ const app = createApp({
         messages.value.push(sent);
         markRead(currentOrder.value.id);
         await nextTick();
-        if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+        if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
     }
 
@@ -624,6 +659,9 @@ const app = createApp({
       showGoodForm.value = true;
     }
     async function saveGoodForm() {
+      const f = goodForm.value;
+      if (!f.title.trim()) { vant.showToast('请输入商品名称'); return; }
+      if (!f.priceYuan || Number(f.priceYuan) <= 0) { vant.showToast('请输入有效价格'); return; }
       savingGood.value = true;
       try {
         const f = goodForm.value;
@@ -666,6 +704,9 @@ const app = createApp({
       loadGoods();
     }
 
+    function formatPrice(fen) { return (fen / 100).toFixed(2); }
+    function isNearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
+
     function statusText(s) { return {'-1':'咨询',0:'待支付',1:'待接单',2:'已接单',3:'已完成',4:'退款中',5:'已退款'}[s] ?? '未知'; }
     function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#5b8dd9',4:'#e65c5c',5:'#c0564a'}[s] ?? '#787890'; }
     function roleLabel(r) { return { CUSTOMER:'客户', MERCHANT:'商家' }[r] || r; }
@@ -691,30 +732,45 @@ const app = createApp({
 
     onMounted(async () => {
       try {
+        await initConfig();
         await wxLogin();
         ready.value = true;
+        loginError.value = false;
         wxJSSDKInit();
         loadOrders(); loadGoods(); loadStats();
         pollTimer = setInterval(() => { loadOrders(); pollChat(); }, 5000);
-      } catch (e) { console.error('登录失败:', e); }
+      } catch (e) {
+        console.error('登录失败:', e);
+        loginError.value = true;
+      }
     });
-    onUnmounted(() => clearInterval(pollTimer));
 
-    // iOS WKWebView: pages from back-forward cache need polling restart
-    window.addEventListener('pageshow', (e) => {
-      if (e.persisted && ready.value) {
-        clearInterval(pollTimer);
+    function retryLogin() {
+      loginError.value = false;
+      localStorage.removeItem('wx_token');
+      location.reload();
+    }
+
+    onUnmounted(() => { clearInterval(pollTimer); pollTimer = null; });
+
+    // 页面可见性：切后台暂停轮询，回前台恢复
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        clearInterval(pollTimer); pollTimer = null;
+      } else if (ready.value) {
+        if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(() => { loadOrders(); pollChat(); }, 5000);
+        loadOrders(); loadGoods(); loadStats();
       }
     });
 
     return {
-      ready, activeTab, orders, filteredOrders, orderFilter, conversations, goods, detailOrder, currentOrder, messages, msgInput, chatBox, stats, statusDistList,
+      ready, loginError, activeTab, orders, filteredOrders, orderFilter, conversations, goods, detailOrder, currentOrder, messages, msgInput, chatBox, stats, statusDistList, actionLoading,
       showGoodForm, isEditGood, savingGood, goodForm,
       openOrderDetail, closeOrderDetail, goToChat, openChat, closeChat, acceptOrder, completeOrder, refundOrderAction, sendMessage,
       openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,
       uploadCover, uploadDetail, removeDetailImg,
-      unreadCount, statusText, statusColor, roleLabel, convTitle, formatTime
+      unreadCount, statusText, statusColor, roleLabel, convTitle, formatTime, formatPrice, retryLogin
     };
   }
 });

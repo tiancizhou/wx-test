@@ -152,7 +152,11 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 <div id="app">
   <!-- 登录加载中 -->
   <div v-if="!ready" class="loading-mask">
-    <van-loading size="36px">正在登录...</van-loading>
+    <van-loading v-if="!loginError" size="36px">正在登录...</van-loading>
+    <div v-else style="text-align:center;">
+      <div style="color:#b0b0c0;margin-bottom:16px;">登录失败，请重试</div>
+      <van-button type="primary" round @click="retryLogin">重新登录</van-button>
+    </div>
   </div>
 
   <template v-else>
@@ -178,8 +182,8 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
           <div class="good-card-title">{{ g.title }}</div>
           <div class="good-card-bottom">
             <div>
-              <span class="good-card-price"><span class="unit">¥</span>{{ (g.price/100).toFixed(0) }}</span>
-              <span class="good-card-original" v-if="g.original_price">¥{{ (g.original_price/100).toFixed(0) }}</span>
+              <span class="good-card-price"><span class="unit">¥</span>{{ formatPrice(g.price) }}</span>
+              <span class="good-card-original" v-if="g.original_price">¥{{ formatPrice(g.original_price) }}</span>
             </div>
             <span class="good-card-tag">{{ g.duration }}分钟</span>
           </div>
@@ -210,7 +214,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         <div class="order-summary-text">
           {{ o.phone }} · {{ o.appointment_time }}
         </div>
-        <div class="order-price">¥{{ (o.total_fee/100).toFixed(0) }}</div>
+        <div class="order-price">¥{{ formatPrice(o.total_fee) }}</div>
       </div>
     </div>
     <!-- 订单详情视图 -->
@@ -227,7 +231,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
           <div style="font-size:15px;font-weight:600;color:#ffffff;">{{ currentOrder.good_title || '商品' }}</div>
           <div style="font-size:13px;color:#787890;margin-top:2px;">{{ currentOrder.good_duration }}分钟</div>
           <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px;">
-            <span style="color:#c9a96e;font-size:16px;font-weight:700;">¥{{ (currentOrder.total_fee/100).toFixed(0) }}</span>
+            <span style="color:#c9a96e;font-size:16px;font-weight:700;">¥{{ formatPrice(currentOrder.total_fee) }}</span>
           </div>
         </div>
         <span style="color:#c9a96e;align-self:center;font-size:14px;">›</span>
@@ -343,8 +347,8 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         <div style="padding:16px;">
           <div class="detail-title">{{ detailGood.title }}</div>
           <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;">
-            <span class="detail-price">¥{{ (detailGood.price/100).toFixed(0) }}</span>
-            <span v-if="detailGood.original_price" class="detail-original">¥{{ (detailGood.original_price/100).toFixed(0) }}</span>
+            <span class="detail-price">¥{{ formatPrice(detailGood.price) }}</span>
+            <span v-if="detailGood.original_price" class="detail-original">¥{{ formatPrice(detailGood.original_price) }}</span>
             <span class="detail-meta" style="margin-left:auto;">已售 {{ detailGood.sales || 0 }} · {{ detailGood.duration }}分钟</span>
           </div>
           <div class="detail-desc" style="margin-top:16px;">{{ detailGood.description }}</div>
@@ -356,7 +360,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         </div>
         <div class="detail-cta" style="display:flex;gap:10px;">
           <van-button style="flex:1;" round plain @click="startConsult(detailGood)">咨询商家</van-button>
-          <van-button type="primary" style="flex:2;" round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ (detailGood.price/100).toFixed(0) }}</van-button>
+          <van-button type="primary" style="flex:2;" round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ formatPrice(detailGood.price) }}</van-button>
         </div>
       </div>
     </div>
@@ -419,7 +423,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         </div>
       </div>
       <van-button type="primary" block round @click="submitOrder" :loading="submitting" :disabled="!bookForm.phone || !bookForm.timeSlot">
-        确认下单 · ¥{{ ((bookGood?.price||0)/100 * bookForm.quantity).toFixed(0) }}
+        确认下单 · ¥{{ formatPrice((bookGood?.price||0) * bookForm.quantity) }}
       </van-button>
     </div>
   </van-popup>
@@ -427,10 +431,21 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 </div>
 
 <script>
-// ---- 微信 OAuth 登录 + JS-SDK 初始化 ----
-const WX_APP_ID = 'wx9e7f92a7fad7e40f';
+// ---- 前端配置 ----
+let WX_APP_ID = 'wx9e7f92a7fad7e40f';
+let BASE_URL = 'https://wx.qlc.xn--6qq986b3xl';
 const WX_OAUTH_BASE = 'https://open.weixin.qq.com/connect/oauth2/authorize';
-const BASE_URL = 'https://wx.qlc.xn--6qq986b3xl';
+
+async function initConfig() {
+  try {
+    const res = await fetch('/config/frontend');
+    if (res.ok) {
+      const cfg = await res.json();
+      if (cfg.app_id) WX_APP_ID = cfg.app_id;
+      if (cfg.base_url) BASE_URL = cfg.base_url;
+    }
+  } catch {}
+}
 
 async function wxLogin() {
   const token = localStorage.getItem('wx_token');
@@ -440,12 +455,10 @@ async function wxLogin() {
   const code = params.get('code');
 
   if (code) {
-    // 用 code 换 token
     const res = await fetch(`/wechat/auth?code=${code}`);
     if (res.ok) {
       const data = await res.json();
       localStorage.setItem('wx_token', data.token);
-      // 清除 URL 中的 code 参数
       params.delete('code');
       params.delete('state');
       const clean = params.toString();
@@ -454,7 +467,6 @@ async function wxLogin() {
     }
   }
 
-  // 没有 token 也没有 code → 跳转微信 OAuth
   const redirectUri = encodeURIComponent(BASE_URL + location.pathname);
   location.href = `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_base&state=customer#wechat_redirect`;
 }
@@ -485,6 +497,7 @@ const app = createApp({
     const API = '';
     const TOKEN = () => localStorage.getItem('wx_token') || '';
     const ready = ref(false);
+    const loginError = ref(false);
 
     const activeTab = ref(0);
     const goods = ref([]);
@@ -581,6 +594,11 @@ const app = createApp({
 
     async function api(path, opts = {}) {
       const res = await fetch(API + path, { headers: headers(), ...opts });
+      if (res.status === 401) {
+        localStorage.removeItem('wx_token');
+        location.reload();
+        throw new Error('登录已过期');
+      }
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }
@@ -597,7 +615,7 @@ const app = createApp({
       orderMessageCache.value[orderId] = [...loaded];
       if (loaded.length) markRead(orderId);
       await nextTick();
-      if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+      if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
     }
     async function pollChat() {
       if (activeTab.value === 1 && currentOrder.value) {
@@ -608,7 +626,7 @@ const app = createApp({
           orderMessageCache.value[currentOrder.value.id] = [...messages.value];
           markRead(currentOrder.value.id);
           await nextTick();
-          if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+          if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
         }
       } else if (activeTab.value === 2 && activeConv.value) {
         await pollConvChat();
@@ -634,6 +652,10 @@ const app = createApp({
     }
     async function submitOrder() {
       if (submitting.value) return;
+      if (!/^1\d{10}$/.test(bookForm.value.phone)) {
+        vant.showToast('请输入正确的手机号');
+        return;
+      }
       submitting.value = true;
       let unpaidOrderId = null;
       try {
@@ -751,7 +773,7 @@ const app = createApp({
         orderMessageCache.value[currentOrder.value.id] = [...messages.value];
         markRead(currentOrder.value.id);
         await nextTick();
-        if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+        if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
     }
 
@@ -789,7 +811,7 @@ const app = createApp({
       if (loaded.length) markRead(conv.order_id);
       else if (conv.last_msg_id) markRead(conv.order_id);
       await nextTick();
-      if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
+      if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
     }
     function closeConversation() {
       activeConv.value = null;
@@ -804,7 +826,7 @@ const app = createApp({
         convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
         markRead(activeConv.value.order_id);
         await nextTick();
-        if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
+        if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       }
     }
     async function startConsult(good) {
@@ -822,7 +844,7 @@ const app = createApp({
         if (!sameMessages(cached, loaded)) convMessages.value = loaded;
         convMessageCache.value[order.id] = [...loaded];
         await nextTick();
-        if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
+        if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       } catch (e) {
         vant.showToast('咨询失败，请重试');
       }
@@ -839,7 +861,7 @@ const app = createApp({
         convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
         markRead(activeConv.value.order_id);
         await nextTick();
-        if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
+        if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
     }
     // 切换到消息Tab时自动加载会话列表
@@ -853,9 +875,12 @@ const app = createApp({
     watch(activeConv, async (conv) => {
       if (conv) {
         await nextTick();
-        if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
+        if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       }
     });
+
+    function formatPrice(fen) { return (fen / 100).toFixed(2); }
+    function isNearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
 
     function statusText(s) { return {'-1':'咨询',0:'待支付',1:'待接单',2:'已接单',3:'已完成',4:'退款中',5:'已退款'}[s] ?? '未知'; }
     function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#787890',4:'#e65c5c',5:'#c0564a'}[s] ?? '#787890'; }
@@ -875,42 +900,53 @@ const app = createApp({
 
     onMounted(async () => {
       try {
+        await initConfig();
         await wxLogin();
         ready.value = true;
+        loginError.value = false;
         wxJSSDKInit();
         loadGoods();
         loadOrders();
         loadMe();
         loadConversations();
         pollTimer = setInterval(pollChat, 5000);
-        // WKWebView keyboard: scroll chat to bottom when window resizes (keyboard up/down)
         window.addEventListener('resize', () => {
-          if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+          if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
         });
       } catch (e) {
         console.error('登录失败:', e);
+        loginError.value = true;
       }
     });
 
-    onUnmounted(() => clearInterval(pollTimer));
+    function retryLogin() {
+      loginError.value = false;
+      localStorage.removeItem('wx_token');
+      location.reload();
+    }
 
-    // iOS WKWebView: pages from back-forward cache need polling restart
-    window.addEventListener('pageshow', (e) => {
-      if (e.persisted && ready.value) {
-        clearInterval(pollTimer);
+    onUnmounted(() => { clearInterval(pollTimer); pollTimer = null; });
+
+    // 页面可见性：切后台暂停轮询，回前台恢复
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        clearInterval(pollTimer); pollTimer = null;
+      } else if (ready.value) {
+        if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(pollChat, 5000);
+        loadOrders(); loadConversations();
       }
     });
 
     return {
-      ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
+      ready, loginError, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
       chatBox, showBook, bookGood, bookForm, submitting,
       showDetail, detailGood, detailImages, timeSlots, dateOptions, showContact, contactInfo,
       conversations, activeConv, convMessages, convMsgInput, convChatBox,
       openBook, submitOrder, refundOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
       startConsult,
       openConversation, closeConversation, sendConvMessage, contactMerchant, copyText,
-      unreadCount, statusText, statusColor, statusClass, roleLabel, formatTime, orderStats, orderFilter, filteredOrders, goToOrders, clearFilter
+      unreadCount, statusText, statusColor, statusClass, roleLabel, formatTime, formatPrice, retryLogin, orderStats, orderFilter, filteredOrders, goToOrders, clearFilter
     };
   }
 });

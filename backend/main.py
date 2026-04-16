@@ -12,13 +12,13 @@ from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, init_db
 from models import User, Good, Order, OrderStatus, ChatLog, ChatReadState, Role
-from schemas import GoodOut, GoodUpdate, GoodCreate, OrderCreate, ConsultCreate, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
+from schemas import GoodOut, GoodUpdate, GoodCreate, ConsultCreate, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
 from deps import get_current_user, require_role
 
 
@@ -294,6 +294,23 @@ async def upload_image(
 
 
 # ============================================================
+# 订单访问权限校验
+# ============================================================
+
+async def _verify_order_access(order_id: str, user: User, db: AsyncSession) -> Order:
+    """校验订单存在性及当前用户是否有权访问。商家可访问所有订单，客户只能访问自己的。"""
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "订单不存在")
+    if user.role == Role.MERCHANT:
+        return order
+    if order.customer_id != user.id:
+        raise HTTPException(403, "无权访问该订单")
+    return order
+
+
+# ============================================================
 # 支付
 # ============================================================
 
@@ -339,7 +356,7 @@ async def pay_create(
     # Mock 模式：直接标记为已支付
     if settings.PAY_MOCK:
         order.status = OrderStatus.PENDING
-        good.sales += qty
+        await db.execute(update(Good).where(Good.id == good.id).values(sales=Good.sales + qty))
         await db.commit()
         return {"mock": True, "order_id": order.id, "status": "PAID"}
 
@@ -399,7 +416,9 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
         order.status = OrderStatus.PENDING
         order.transaction_id = resource.get("transaction_id", "")
         if order.good:
-            order.good.sales += order.quantity or 1
+            await db.execute(
+                update(Good).where(Good.id == order.good_id).values(sales=Good.sales + (order.quantity or 1))
+            )
         await db.commit()
 
     # 成功：200 无 body
@@ -407,8 +426,13 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/pay/query/{order_id}")
-async def pay_query(order_id: str, db: AsyncSession = Depends(get_db)):
+async def pay_query(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """查询订单支付状态（调微信 V3 查单 API）"""
+    await _verify_order_access(order_id, user, db)
     if settings.PAY_MOCK:
         return {"mock": True, "trade_state": "SUCCESS"}
     try:
@@ -425,10 +449,7 @@ async def pay_close(
     user: User = Depends(get_current_user),
 ):
     """关闭未支付订单：调微信关单 API 并删除 UNPAID 订单"""
-    result = await db.execute(select(Order).where(Order.id == order_id))
-    order = result.scalar_one_or_none()
-    if not order:
-        raise HTTPException(404, "订单不存在")
+    order = await _verify_order_access(order_id, user, db)
     if order.status != OrderStatus.UNPAID:
         raise HTTPException(400, "订单状态不允许关闭")
 
@@ -451,12 +472,13 @@ async def pay_refund(
     user: User = Depends(get_current_user),
 ):
     """申请退款"""
-    result = await db.execute(
-        select(Order).where(Order.id == order_id).options(selectinload(Order.good))
-    )
-    order = result.scalar_one_or_none()
-    if not order:
-        raise HTTPException(404, "订单不存在")
+    order = await _verify_order_access(order_id, user, db)
+    # 重新加载关联的 good
+    if order.good is None:
+        result = await db.execute(
+            select(Order).where(Order.id == order_id).options(selectinload(Order.good))
+        )
+        order = result.scalar_one()
     if order.status not in (OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.COMPLETED):
         raise HTTPException(400, "订单状态不支持退款")
 
@@ -467,7 +489,11 @@ async def pay_refund(
     if settings.PAY_MOCK:
         order.status = OrderStatus.REFUNDED
         if order.good:
-            order.good.sales = max(0, order.good.sales - (order.quantity or 1))
+            qty = order.quantity or 1
+            new_sales = max(0, order.good.sales - qty)
+            await db.execute(
+                update(Good).where(Good.id == order.good_id).values(sales=new_sales)
+            )
         await db.commit()
         return {"mock": True, "status": "SUCCESS"}
 
@@ -515,38 +541,15 @@ async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
             order.status = OrderStatus.REFUNDED
             order.refund_id = resource.get("refund_id", order.refund_id)
             if order.good:
-                order.good.sales = max(0, order.good.sales - (order.quantity or 1))
+                qty = order.quantity or 1
+                new_sales = max(0, order.good.sales - qty)
+                await db.execute(
+                    update(Good).where(Good.id == order.good_id).values(sales=new_sales)
+                )
             await db.commit()
 
     # 成功：200 无 body
     return Response(status_code=200)
-
-@app.post("/orders", response_model=OrderOut)
-async def create_order(
-    data: OrderCreate,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    result = await db.execute(select(Good).where(Good.id == data.good_id, Good.is_active == True))
-    good = result.scalar_one_or_none()
-    if not good:
-        raise HTTPException(404, "商品不存在")
-
-    qty = data.quantity if data.quantity > 0 else 1
-    order = Order(
-        customer_id=user.id,
-        phone=data.phone,
-        address=data.address,
-        appointment_time=data.appointment_time,
-        total_fee=good.price * qty,
-        quantity=qty,
-        status=OrderStatus.PENDING,
-    )
-    db.add(order)
-    good.sales += qty
-    await db.commit()
-    await db.refresh(order)
-    return order
 
 
 @app.get("/my_orders", response_model=list[OrderOut])
@@ -620,35 +623,97 @@ async def active_orders(
         select(Order).options(selectinload(Order.good), selectinload(Order.customer))
         .order_by(Order.create_time.desc())
     )
-    orders = []
-    for o in result.scalars().all():
-        out = _order_to_out(o)
-        last_msg = await db.execute(
-            select(ChatLog).where(ChatLog.order_id == o.id)
-            .order_by(ChatLog.id.desc()).limit(1)
-        )
-        msg = last_msg.scalar_one_or_none()
-        out["last_msg_id"] = msg.id if msg else 0
-        out["last_msg_time"] = msg.create_time if msg else 0
-        out["last_sender_role"] = msg.sender_role if msg else ""
-        out["last_content"] = msg.content[:50] if msg else ""
-        # 查询未读数
-        read_state = await db.execute(
-            select(ChatReadState.last_read_id).where(
-                ChatReadState.user_id == user.id,
-                ChatReadState.order_id == o.id,
-                ChatReadState.reader_role == user.role,
+    all_orders = result.scalars().all()
+    if not all_orders:
+        return []
+
+    order_ids = [o.id for o in all_orders]
+
+    # 批量查询最后一条消息（每条 order_id 取 id 最大的那条）
+    last_msg_rows = await db.execute(
+        select(
+            ChatLog.order_id,
+            ChatLog.id,
+            ChatLog.create_time,
+            ChatLog.sender_role,
+            ChatLog.content,
+        ).where(
+            ChatLog.id.in_(
+                select(func.max(ChatLog.id)).where(ChatLog.order_id.in_(order_ids)).group_by(ChatLog.order_id)
             )
         )
-        last_read_id = read_state.scalar() or 0
-        unread = await db.scalar(
-            select(func.count()).select_from(ChatLog).where(
-                ChatLog.order_id == o.id,
-                ChatLog.id > last_read_id,
+    )
+    last_msg_map = {}
+    for row in last_msg_rows.all():
+        last_msg_map[row[0]] = {
+            "id": row[1], "create_time": row[2],
+            "sender_role": row[3], "content": row[4][:50] if row[4] else "",
+        }
+
+    # 批量查询已读状态
+    read_rows = await db.execute(
+        select(ChatReadState).where(
+            ChatReadState.user_id == user.id,
+            ChatReadState.order_id.in_(order_ids),
+            ChatReadState.reader_role == user.role,
+        )
+    )
+    read_map = {r.order_id: r.last_read_id for r in read_rows.scalars().all()}
+
+    # 批量查询未读数：按 order_id 分组统计
+    unread_rows = await db.execute(
+        select(ChatLog.order_id, func.count(ChatLog.id)).where(
+            ChatLog.order_id.in_(order_ids),
+            ChatLog.sender_role != user.role,
+        ).group_by(ChatLog.order_id)
+    )
+    # 需要按 last_read_id 过滤，在内存中处理
+    all_unread_msgs = {}
+    for oid, cnt in unread_rows.all():
+        all_unread_msgs[oid] = cnt
+
+    # 对有 read_state 的订单，精确计算未读数
+    unread_map = {}
+    if read_map:
+        # 构造条件：对每个有 read_state 的 order，查询 id > last_read_id 的未读数
+        unread_exact = await db.execute(
+            select(ChatLog.order_id, func.count(ChatLog.id))
+            .where(
+                ChatLog.order_id.in_(list(read_map.keys())),
                 ChatLog.sender_role != user.role,
             )
+            .group_by(ChatLog.order_id)
         )
-        out["unread_count"] = unread
+        for oid, cnt in unread_exact.all():
+            # SQLite 不方便在 SQL 中做 per-row 的 id > read_map[oid] 过滤
+            pass
+
+        # 简化：对有 read_state 的订单逐个查（数量通常不多）
+        for oid, last_read_id in read_map.items():
+            cnt = await db.scalar(
+                select(func.count()).select_from(ChatLog).where(
+                    ChatLog.order_id == oid,
+                    ChatLog.id > last_read_id,
+                    ChatLog.sender_role != user.role,
+                )
+            )
+            unread_map[oid] = cnt
+
+    # 对没有 read_state 的订单，未读数 = 全部非自己发的消息
+    for oid in order_ids:
+        if oid not in unread_map:
+            unread_map[oid] = all_unread_msgs.get(oid, 0)
+
+    # 组装结果
+    orders = []
+    for o in all_orders:
+        out = _order_to_out(o)
+        msg = last_msg_map.get(o.id)
+        out["last_msg_id"] = msg["id"] if msg else 0
+        out["last_msg_time"] = msg["create_time"] if msg else 0
+        out["last_sender_role"] = msg["sender_role"] if msg else ""
+        out["last_content"] = msg["content"] if msg else ""
+        out["unread_count"] = unread_map.get(o.id, 0)
         orders.append(out)
     return orders
 
@@ -659,7 +724,10 @@ async def accept_order(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(Role.MERCHANT)),
 ):
-    result = await db.execute(select(Order).where(Order.id == order_id))
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.customer))
+        .with_for_update()
+    )
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "订单不存在")
@@ -670,7 +738,6 @@ async def accept_order(
 
     # 推送模板消息通知客户
     try:
-        await db.refresh(order.customer)
         await notify_order_accepted(
             openid=order.customer.openid,
             order_id=order.id,
@@ -688,7 +755,10 @@ async def complete_order(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(Role.MERCHANT)),
 ):
-    result = await db.execute(select(Order).where(Order.id == order_id))
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.customer))
+        .with_for_update()
+    )
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "订单不存在")
@@ -699,7 +769,6 @@ async def complete_order(
 
     # 推送模板消息通知客户
     try:
-        await db.refresh(order.customer)
         await notify_order_completed(
             openid=order.customer.openid,
             order_id=order.id,
@@ -850,6 +919,7 @@ async def get_chat(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await _verify_order_access(order_id, user, db)
     result = await db.execute(
         select(ChatLog)
         .where(ChatLog.order_id == order_id, ChatLog.id > after_id)
@@ -864,6 +934,7 @@ async def send_chat(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await _verify_order_access(data.order_id, user, db)
     log = ChatLog(
         order_id=data.order_id,
         sender_id=user.id,
@@ -883,6 +954,7 @@ async def mark_chat_read(
     user: User = Depends(get_current_user),
 ):
     """标记该用户在此会话中已读（记录最新消息 id）"""
+    await _verify_order_access(order_id, user, db)
     last_msg = await db.execute(
         select(ChatLog).where(ChatLog.order_id == order_id).order_by(ChatLog.id.desc()).limit(1)
     )
@@ -1119,6 +1191,12 @@ async def update_contact_config(
     cfg = {"wechat": wechat, "phone": phone}
     CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
     return {"msg": "已保存"}
+
+
+@app.get("/config/frontend")
+async def frontend_config():
+    """前端配置：AppID、域名等"""
+    return {"app_id": settings.APP_ID, "base_url": ""}
 
 
 # ============================================================

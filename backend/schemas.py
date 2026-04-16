@@ -47,14 +47,6 @@ class ConsultCreate(BaseModel):
     good_id: int
 
 
-class OrderCreate(BaseModel):
-    good_id: int
-    phone: str
-    address: str
-    appointment_time: str
-    quantity: int = 1
-
-
 class OrderOut(BaseModel):
     id: str
     customer_id: int
