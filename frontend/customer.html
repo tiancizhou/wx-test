@@ -236,6 +236,11 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <div v-if="currentOrder" class="appt-info">
         <div style="font-size:13px;"><span class="label">手机号：</span><span class="value">{{ currentOrder.phone }}</span></div>
         <div style="font-size:13px;margin-top:4px;"><span class="label">预约时间：</span><span class="value">{{ currentOrder.appointment_time }}</span></div>
+        <div v-if="currentOrder.quantity > 1" style="font-size:13px;margin-top:4px;"><span class="label">数量：</span><span class="value">{{ currentOrder.quantity }}</span></div>
+      </div>
+      <!-- 退款按钮 -->
+      <div v-if="currentOrder && [1,2,3].includes(currentOrder.status)" style="padding:0 10px;margin:8px 0;">
+        <van-button block round type="danger" size="small" @click="refundOrder(currentOrder)" :loading="submitting">申请退款</van-button>
       </div>
       <div class="chat-messages" ref="chatBox">
         <div v-if="!messages.length" class="empty-state" style="padding:40px 0;">暂无消息</div>
@@ -700,6 +705,22 @@ const app = createApp({
       currentOrder.value = order;
       loadChat(order.id);
     }
+    async function refundOrder(order) {
+      try {
+        await vant.showConfirmDialog({ title: '确认退款', message: '确认申请退款？退款将原路返回。' });
+      } catch { return; }
+      submitting.value = true;
+      try {
+        await api(`/pay/refund/${order.id}`, { method: 'POST', body: JSON.stringify({}) });
+        vant.showToast('退款申请已提交');
+        loadOrders();
+        closeOrderDetail();
+      } catch (e) {
+        vant.showToast('退款失败: ' + (e.message || e));
+      } finally {
+        submitting.value = false;
+      }
+    }
     function closeOrderDetail() {
       currentOrder.value = null;
     }
@@ -880,7 +901,7 @@ const app = createApp({
       chatBox, showBook, bookGood, bookForm, submitting,
       showDetail, detailGood, detailImages, timeSlots, dateOptions, showContact, contactInfo,
       conversations, activeConv, convMessages, convMsgInput, convChatBox,
-      openBook, submitOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
+      openBook, submitOrder, refundOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
       startConsult,
       openConversation, closeConversation, sendConvMessage, contactMerchant, copyText,
       unreadCount, statusText, statusColor, statusClass, roleLabel, formatTime, orderStats, orderFilter, filteredOrders, goToOrders, clearFilter

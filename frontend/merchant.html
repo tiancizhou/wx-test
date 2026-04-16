@@ -127,6 +127,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       <div style="padding:0 10px;display:flex;gap:8px;">
         <van-button v-if="detailOrder.status===1" size="small" type="primary" @click="acceptOrder(detailOrder.id)" style="flex:1;">接单</van-button>
         <van-button v-if="detailOrder.status===2" size="small" type="success" @click="completeOrder(detailOrder.id)" style="flex:1;">完成</van-button>
+        <van-button v-if="[1,2,3].includes(detailOrder.status)" size="small" type="danger" plain @click="refundOrderAction(detailOrder)" style="flex:1;">退款</van-button>
         <van-button size="small" plain @click="goToChat(detailOrder)" style="flex:1;color:var(--gold);border-color:var(--gold);">进入会话</van-button>
       </div>
     </div>
@@ -472,6 +473,15 @@ const app = createApp({
     function closeChat() { currentOrder.value = null; messages.value = []; }
     async function acceptOrder(id) { await api(`/orders/${id}/accept`, { method: 'POST' }); vant.showToast('已接单'); loadOrders(); detailOrder.value = null; }
     async function completeOrder(id) { await api(`/orders/${id}/complete`, { method: 'POST' }); vant.showToast('已完成'); loadOrders(); detailOrder.value = null; }
+    async function refundOrderAction(order) {
+      try { await vant.showConfirmDialog({ title: '确认退款', message: '确认对该订单进行退款？' }); } catch { return; }
+      try {
+        await api(`/pay/refund/${order.id}`, { method: 'POST', body: JSON.stringify({}) });
+        vant.showToast('退款申请已提交');
+        loadOrders();
+        detailOrder.value = null;
+      } catch (e) { vant.showToast('退款失败: ' + (e.message || e)); }
+    }
     async function sendMessage() {
       if (!msgInput.value.trim() || !currentOrder.value) return;
       try {
@@ -595,7 +605,7 @@ const app = createApp({
     return {
       ready, activeTab, orders, filteredOrders, orderFilter, conversations, goods, detailOrder, currentOrder, messages, msgInput, chatBox,
       showGoodForm, isEditGood, savingGood, goodForm,
-      openOrderDetail, closeOrderDetail, goToChat, openChat, closeChat, acceptOrder, completeOrder, sendMessage,
+      openOrderDetail, closeOrderDetail, goToChat, openChat, closeChat, acceptOrder, completeOrder, refundOrderAction, sendMessage,
       openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,
       uploadCover, uploadDetail, removeDetailImg,
       unreadCount, statusText, statusColor, roleLabel, convTitle, formatTime
