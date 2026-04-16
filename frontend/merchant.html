@@ -158,7 +158,8 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         <div :class="['filter-tag', orderFilter === -1 ? 'active' : '']" @click="orderFilter = orderFilter === -1 ? null : -1">咨询</div>
         <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">已下单</div>
         <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">已完成</div>
-        <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已退款</div>
+        <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">退款中</div>
+        <div :class="['filter-tag', orderFilter === 4 ? 'active' : '']" @click="orderFilter = orderFilter === 4 ? null : 4">已退款</div>
       </div>
       <div v-if="!filteredOrders.length" style="text-align:center;padding:60px 0;color:var(--text-secondary);font-size:13px;">暂无订单</div>
       <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
@@ -510,6 +511,7 @@ const app = createApp({
       const items = [
         { key: 'ordered', label: '已下单', color: '#d4a03c' },
         { key: 'completed', label: '已完成', color: '#07c160' },
+        { key: 'refunding', label: '退款中', color: '#e6a23c' },
         { key: 'refunded', label: '已退款', color: '#c0564a' },
       ];
       return items.filter(it => dist[it.key]).map(it => ({
@@ -695,8 +697,8 @@ const app = createApp({
     function formatPrice(fen) { return (fen / 100).toFixed(2); }
     function isNearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
 
-    function statusText(s) { return {'-1':'咨询',0:'待付款',1:'已下单',2:'已完成',3:'已退款'}[s] ?? '未知'; }
-    function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#c0564a'}[s] ?? '#787890'; }
+    function statusText(s) { return {'-1':'咨询',0:'待付款',1:'已下单',2:'已完成',3:'退款中',4:'已退款'}[s] ?? '未知'; }
+    function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#e6a23c',4:'#c0564a'}[s] ?? '#787890'; }
     function roleLabel(r) { return { CUSTOMER:'客户', MERCHANT:'商家' }[r] || r; }
     function convTitle(o) {
       if (!o) return '';

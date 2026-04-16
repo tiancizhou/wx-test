@@ -483,13 +483,7 @@ async def pay_refund(
     reason = body.get("reason", "商户退款")
 
     if settings.PAY_MOCK:
-        order.status = OrderStatus.REFUNDED
-        if order.good:
-            qty = order.quantity or 1
-            new_sales = max(0, order.good.sales - qty)
-            await db.execute(
-                update(Good).where(Good.id == order.good_id).values(sales=new_sales)
-            )
+        order.status = OrderStatus.REFUNDING
         await db.commit()
         return {"mock": True, "status": "SUCCESS"}
 
@@ -505,7 +499,7 @@ async def pay_refund(
             reason=reason,
             transaction_id=order.transaction_id,
         )
-        order.status = OrderStatus.REFUNDED
+        order.status = OrderStatus.REFUNDING
         order.refund_id = resp.get("refund_id", "")
         await db.commit()
         return {"mock": False, "status": resp.get("status", "PROCESSING"), "refund_id": resp.get("refund_id")}
@@ -770,7 +764,7 @@ async def stats_dashboard(
     month_start = _day_start_ts(datetime.date(now.year, now.month, 1))
 
     # 有效订单状态（排除咨询和未支付）
-    valid_status = [OrderStatus.ORDERED, OrderStatus.COMPLETED, OrderStatus.REFUNDED]
+    valid_status = [OrderStatus.ORDERED, OrderStatus.COMPLETED, OrderStatus.REFUNDING, OrderStatus.REFUNDED]
     paid_status = [OrderStatus.ORDERED, OrderStatus.COMPLETED]
 
     async def _period_stats(start_ts):
@@ -794,7 +788,7 @@ async def stats_dashboard(
         .where(Order.create_time >= month_start)
         .group_by(Order.status)
     )
-    status_names = {1: "ordered", 2: "completed", 3: "refunded"}
+    status_names = {1: "ordered", 2: "completed", 3: "refunding", 4: "refunded"}
     status_dist = {}
     for status_val, cnt in status_result.all():
         key = status_names.get(status_val, str(status_val))

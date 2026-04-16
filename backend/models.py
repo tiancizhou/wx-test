@@ -18,7 +18,8 @@ class OrderStatus(IntEnum):
     UNPAID = 0          # 待付款
     ORDERED = 1         # 已下单
     COMPLETED = 2       # 已完成
-    REFUNDED = 3        # 已退款
+    REFUNDING = 3       # 退款中
+    REFUNDED = 4        # 已退款
 
 
 class User(Base):
