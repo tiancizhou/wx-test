@@ -502,13 +502,21 @@ async def get_all_chat(
     user: User = Depends(get_current_user),
 ):
     """客户：获取所有订单的合并聊天记录"""
+    order_result = await db.execute(
+        select(Order.id).where(Order.customer_id == user.id)
+    )
+    order_ids = [row[0] for row in order_result.fetchall()]
+    print(f"[chat/all] user={user.id}, order_ids={order_ids}, after_id={after_id}")
+    if not order_ids:
+        return []
     result = await db.execute(
         select(ChatLog)
-        .join(Order, ChatLog.order_id == Order.id)
-        .where(Order.customer_id == user.id, ChatLog.id > after_id)
+        .where(ChatLog.order_id.in_(order_ids), ChatLog.id > after_id)
         .order_by(ChatLog.create_time)
     )
-    return result.scalars().all()
+    rows = result.scalars().all()
+    print(f"[chat/all] found {len(rows)} messages")
+    return rows
 
 
 # ============================================================
