@@ -44,6 +44,9 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
 .good-card-btn.primary { color: var(--gold); }
 .good-card-btn.success { color: #07c160; }
 .unread-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: #e74c3c; }
+.filter-bar { display: flex; gap: 8px; padding: 0 16px 8px; overflow-x: auto; }
+.filter-tag { flex-shrink: 0; padding: 6px 14px; border-radius: 16px; font-size: 13px; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border); cursor: pointer; }
+.filter-tag.active { color: var(--bg-primary); background: var(--gold); border-color: var(--gold); font-weight: 600; }
 .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; }
 .upload-area { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px; }
 .upload-thumb { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; position: relative; }
@@ -76,11 +79,18 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
     <van-tabbar-item icon="shop-o">商品</van-tabbar-item>
   </van-tabbar>
 
-  <!-- 待接单/活跃订单 -->
+  <!-- 订单列表 -->
   <div v-show="activeTab === 0" style="padding-bottom:60px;">
-    <div style="padding:12px 16px;font-weight:600;font-size:16px;color:var(--text-title);">活跃订单</div>
-    <div v-if="!orders.length" style="text-align:center;padding:60px 0;color:var(--text-secondary);font-size:13px;">暂无活跃订单</div>
-    <div v-for="o in orders" :key="o.id" class="order-card" @click="openChat(o)">
+    <div style="padding:12px 16px;font-weight:600;font-size:16px;color:var(--text-title);">订单管理</div>
+    <div class="filter-bar">
+      <div :class="['filter-tag', orderFilter === null ? 'active' : '']" @click="orderFilter = null">全部</div>
+      <div :class="['filter-tag', orderFilter === -1 ? 'active' : '']" @click="orderFilter = orderFilter === -1 ? null : -1">咨询</div>
+      <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">待接单</div>
+      <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">进行中</div>
+      <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已完成</div>
+    </div>
+    <div v-if="!filteredOrders.length" style="text-align:center;padding:60px 0;color:var(--text-secondary);font-size:13px;">暂无订单</div>
+    <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openChat(o)">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div style="display:flex;align-items:center;gap:6px;">
           <span v-if="o.unread_count" class="unread-dot"></span>
@@ -296,6 +306,11 @@ const app = createApp({
     let pollTimer = null;
 
     // ---- 未读追踪 ----
+    const orderFilter = ref(null);
+    const filteredOrders = computed(() => {
+      if (orderFilter.value === null) return orders.value;
+      return orders.value.filter(o => o.status === orderFilter.value);
+    });
     const unreadCount = computed(() => orders.value.reduce((sum, o) => sum + (o.unread_count || 0), 0));
     async function markRead(orderId) {
       try { await api(`/chat/read/${orderId}`, { method: 'POST' }); } catch {}
@@ -473,7 +488,7 @@ const app = createApp({
     onUnmounted(() => clearInterval(pollTimer));
 
     return {
-      ready, activeTab, orders, goods, currentOrder, messages, msgInput, chatBox,
+      ready, activeTab, orders, filteredOrders, orderFilter, goods, currentOrder, messages, msgInput, chatBox,
       showGoodForm, isEditGood, savingGood, goodForm,
       openChat, closeChat, acceptOrder, completeOrder, sendMessage,
       openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,
