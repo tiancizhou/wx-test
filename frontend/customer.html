@@ -126,25 +126,25 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 
   <!-- 首页：商品列表 -->
   <div v-show="activeTab === 0" style="padding-bottom:60px;">
-    <div style="background:linear-gradient(135deg,#07c160,#06ad56);padding:20px 16px 30px;color:#fff;">
-      <div style="font-size:20px;font-weight:700;">到家按摩</div>
-      <div style="font-size:13px;opacity:.8;margin-top:4px;">专业技师 上门服务</div>
+    <div style="background:linear-gradient(180deg,#1a1a2e,#252540);padding:24px 16px 36px;">
+      <div style="font-size:22px;font-weight:700;color:#c9a96e;">到店按摩</div>
+      <div style="font-size:13px;color:#b0b0c0;margin-top:4px;">匠心技艺 到店体验</div>
+      <div style="height:1px;background:linear-gradient(90deg,transparent,#c9a96e,transparent);margin-top:16px;opacity:.4;"></div>
     </div>
-    <div v-for="g in goods" :key="g.id" class="good-card" @click="openDetail(g)">
-      <img :src="g.img_url || 'https://via.placeholder.com/130'" class="good-img">
-      <div class="good-info">
-        <div>
-          <div class="good-title">{{ g.title }}</div>
-          <div class="good-desc">{{ g.description }}</div>
-        </div>
-        <div class="good-bottom">
-          <div>
-            <span class="good-price"><span class="unit">¥</span>{{ (g.price/100).toFixed(0) }}</span>
-            <span class="good-original" v-if="g.original_price">¥{{ (g.original_price/100).toFixed(0) }}</span>
+    <div class="good-grid">
+      <div v-for="g in goods" :key="g.id" class="good-card" @click="openDetail(g)">
+        <img :src="g.img_url || 'https://via.placeholder.com/300x170/252540/787890?text=No+Image'" loading="lazy">
+        <div class="good-card-info">
+          <div class="good-card-title">{{ g.title }}</div>
+          <div class="good-card-bottom">
+            <div>
+              <span class="good-card-price"><span class="unit">¥</span>{{ (g.price/100).toFixed(0) }}</span>
+              <span class="good-card-original" v-if="g.original_price">¥{{ (g.original_price/100).toFixed(0) }}</span>
+            </div>
+            <span class="good-card-tag">{{ g.duration }}分钟</span>
           </div>
-          <span class="good-tag">{{ g.duration }}分钟</span>
+          <div class="good-card-meta">已售 {{ g.sales || 0 }}</div>
         </div>
-        <div style="font-size:11px;color:#999;margin-top:2px;">已售 {{ g.sales || 0 }} · 点击查看详情</div>
       </div>
     </div>
   </div>
