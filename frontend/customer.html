@@ -269,8 +269,9 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
             </div>
           </div>
         </div>
-        <div class="detail-cta">
-          <van-button type="primary" block round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ (detailGood.price/100).toFixed(0) }}</van-button>
+        <div class="detail-cta" style="display:flex;gap:10px;">
+          <van-button style="flex:1;" round plain @click="startConsult(detailGood)">咨询商家</van-button>
+          <van-button type="primary" style="flex:2;" round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ (detailGood.price/100).toFixed(0) }}</van-button>
         </div>
       </div>
     </div>
@@ -563,6 +564,22 @@ const app = createApp({
         if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       }
     }
+    async function startConsult(good) {
+      try {
+        const order = await api('/consult', {
+          method: 'POST',
+          body: JSON.stringify({ good_id: good.id })
+        });
+        showDetail.value = false;
+        activeTab.value = 2;
+        activeConv.value = { order_id: order.id, good_title: order.good_title, status: order.status };
+        convMessages.value = await api(`/chat/${order.id}?after_id=0`);
+        await nextTick();
+        if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
+      } catch (e) {
+        vant.showToast('咨询失败，请重试');
+      }
+    }
     async function sendConvMessage() {
       if (!convMsgInput.value.trim() || !activeConv.value) return;
       try {
@@ -581,8 +598,8 @@ const app = createApp({
       if (tab === 2) loadConversations();
     });
 
-    function statusText(s) { return ['待支付','待接单','已接单','已完成'][s] || '未知'; }
-    function statusColor(s) { return ['#999','#ff9800','#07c160','#999'][s] || '#999'; }
+    function statusText(s) { return {'-1':'咨询',0:'待支付',1:'待接单',2:'已接单',3:'已完成'}[s] ?? '未知'; }
+    function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#787890'}[s] ?? '#787890'; }
     function roleLabel(r) { return { CUSTOMER: '客户', MERCHANT: '商家', SERVICE: '客服' }[r] || r; }
     function formatTime(ts) {
       const d = new Date(ts * 1000);
@@ -622,6 +639,7 @@ const app = createApp({
       showDetail, detailGood, detailImages, timeSlots, dateOptions,
       conversations, activeConv, convMessages, convMsgInput, convChatBox,
       openBook, submitOrder, openOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
+      startConsult,
       openConversation, closeConversation, sendConvMessage,
       statusText, statusColor, roleLabel, formatTime
     };
