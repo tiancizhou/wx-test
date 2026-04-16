@@ -1151,11 +1151,6 @@ async def merchant_page():
     return _html(FRONTEND_DIR / "merchant.html")
 
 
-@app.get("/service")
-async def service_page():
-    return _html(FRONTEND_DIR / "service.html")
-
-
 @app.get("/admin")
 async def admin_page():
     return _html(FRONTEND_DIR / "admin.html")
