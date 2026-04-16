@@ -159,6 +159,16 @@ async def list_goods(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
+@app.get("/goods/all", response_model=list[GoodOut])
+async def list_all_goods(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    """商家：获取全部商品（含已下架）"""
+    result = await db.execute(select(Good).order_by(Good.id))
+    return result.scalars().all()
+
+
 @app.get("/goods/{good_id}", response_model=GoodOut)
 async def get_good(good_id: int, db: AsyncSession = Depends(get_db)):
     """获取单个商品详情（含已下架）"""
@@ -166,16 +176,6 @@ async def get_good(good_id: int, db: AsyncSession = Depends(get_db)):
     if not good:
         raise HTTPException(404, "商品不存在")
     return good
-
-
-@app.get("/goods/all", response_model=list[GoodOut])
-async def list_all_goods(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT)),
-):
-    """商家/管理员：获取全部商品（含已下架）"""
-    result = await db.execute(select(Good).order_by(Good.id))
-    return result.scalars().all()
 
 
 @app.post("/goods", response_model=GoodOut)
