@@ -488,15 +488,10 @@ const app = createApp({
     const convChatBox = ref(null);     // 当前会话的滚动容器 ref
 
     // ---- 新消息通知 ----
-    let lastNotifiedMsgId = 0;
+    const prevConvMsgIds = {}; // { orderId: lastMsgId } 记录上轮各会话最后消息 id
     function notifyNewMessage(senderRole, content) {
-      try {
-        const audio = new Audio('data:audio/wav;base64,UklGRl9vT19teleUEFNRQAAAAEASAAAAIAAAABAAQAIABAAAAA');
-        audio.volume = 0.3;
-        audio.play().catch(() => {});
-      } catch {}
       const label = senderRole === 'MERCHANT' ? '商家' : senderRole === 'SERVICE' ? '客服' : '对方';
-      vant.showToast({ message: `${label}: ${content.slice(0, 20)}${content.length > 20 ? '...' : ''}`, type: 'html', duration: 3000, icon: 'chat-o' });
+      vant.showToast({ message: `${label}: ${content.slice(0, 20)}${content.length > 20 ? '...' : ''}`, duration: 3000, icon: 'chat-o' });
     }
 
     // ---- 未读追踪 ----
@@ -598,7 +593,7 @@ const app = createApp({
           const fromOther = newMsgs.filter(m => m.sender_id !== userId.value);
           if (fromOther.length) {
             const last = fromOther[fromOther.length - 1];
-            if (last.id > lastNotifiedMsgId) { lastNotifiedMsgId = last.id; notifyNewMessage(last.sender_role, last.content); }
+            notifyNewMessage(last.sender_role, last.content);
           }
           messages.value.push(...newMsgs);
           orderMessageCache.value[currentOrder.value.id] = [...messages.value];
@@ -732,7 +727,17 @@ const app = createApp({
     }
     async function loadConversations() {
       try {
-        mergeConversations(await api('/chat/conversations'));
+        const list = await api('/chat/conversations');
+        // 检测新消息：对比上次记录的 last_msg_id
+        for (const c of list) {
+          if (c.last_msg_id && prevConvMsgIds[c.order_id] !== undefined && c.last_msg_id > prevConvMsgIds[c.order_id]) {
+            // 有新消息且当前不在该会话中
+            const inThisConv = activeConv.value && activeConv.value.order_id === c.order_id;
+            if (!inThisConv) notifyNewMessage(c.last_sender_role || '', c.last_content || '');
+          }
+          prevConvMsgIds[c.order_id] = c.last_msg_id || 0;
+        }
+        mergeConversations(list);
       } catch {}
     }
     async function openConversation(conv) {
@@ -759,7 +764,7 @@ const app = createApp({
         const fromOther = newMsgs.filter(m => m.sender_id !== userId.value);
         if (fromOther.length) {
           const last = fromOther[fromOther.length - 1];
-          if (last.id > lastNotifiedMsgId) { lastNotifiedMsgId = last.id; notifyNewMessage(last.sender_role, last.content); }
+          notifyNewMessage(last.sender_role, last.content);
         }
         convMessages.value.push(...newMsgs);
         convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];

@@ -570,6 +570,7 @@ async def get_conversations(
                 "last_content": msg.content[:50],
                 "last_time": msg.create_time,
                 "last_msg_id": msg.id,
+                "last_sender_role": msg.sender_role,
                 "status": order.status,
                 "unread_count": unread,
             })
