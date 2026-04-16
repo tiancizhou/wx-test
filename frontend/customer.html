@@ -554,14 +554,35 @@ const app = createApp({
       } catch (e) { vant.showToast('发送失败'); }
     }
 
+    function sameMessages(a, b) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i].id !== b[i].id) return false;
+      }
+      return true;
+    }
+    function mergeConversations(list) {
+      const prevMap = new Map(conversations.value.map(item => [item.order_id, item]));
+      conversations.value = list.map(item => {
+        const prev = prevMap.get(item.order_id);
+        return prev ? Object.assign(prev, item) : item;
+      });
+      if (activeConv.value) {
+        const nextActive = conversations.value.find(item => item.order_id === activeConv.value.order_id);
+        if (nextActive) activeConv.value = nextActive;
+      }
+    }
     async function loadConversations() {
-      try { conversations.value = await api('/chat/conversations'); } catch {}
+      try {
+        mergeConversations(await api('/chat/conversations'));
+      } catch {}
     }
     async function openConversation(conv) {
       activeConv.value = conv;
-      convMessages.value = convMessageCache.value[conv.order_id] ? [...convMessageCache.value[conv.order_id]] : [];
+      const cached = convMessageCache.value[conv.order_id] ? [...convMessageCache.value[conv.order_id]] : [];
+      convMessages.value = cached;
       const loaded = await api(`/chat/${conv.order_id}?after_id=0`);
-      convMessages.value = loaded;
+      if (!sameMessages(cached, loaded)) convMessages.value = loaded;
       convMessageCache.value[conv.order_id] = [...loaded];
       await nextTick();
       if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
@@ -590,9 +611,10 @@ const app = createApp({
         showDetail.value = false;
         activeTab.value = 2;
         activeConv.value = { order_id: order.id, good_title: order.good_title, status: order.status };
-        convMessages.value = convMessageCache.value[order.id] ? [...convMessageCache.value[order.id]] : [];
+        const cached = convMessageCache.value[order.id] ? [...convMessageCache.value[order.id]] : [];
+        convMessages.value = cached;
         const loaded = await api(`/chat/${order.id}?after_id=0`);
-        convMessages.value = loaded;
+        if (!sameMessages(cached, loaded)) convMessages.value = loaded;
         convMessageCache.value[order.id] = [...loaded];
         await nextTick();
         if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
