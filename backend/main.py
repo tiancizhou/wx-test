@@ -495,6 +495,22 @@ async def send_chat(
     return log
 
 
+@app.get("/chat/all", response_model=list[ChatLogOut])
+async def get_all_chat(
+    after_id: int = 0,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """客户：获取所有订单的合并聊天记录"""
+    order_ids = select(Order.id).where(Order.customer_id == user.id)
+    result = await db.execute(
+        select(ChatLog)
+        .where(ChatLog.order_id.in_(order_ids), ChatLog.id > after_id)
+        .order_by(ChatLog.create_time)
+    )
+    return result.scalars().all()
+
+
 # ============================================================
 # 用户信息
 # ============================================================
