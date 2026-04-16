@@ -447,6 +447,7 @@ async def active_orders(
         out["last_msg_id"] = msg.id if msg else 0
         out["last_msg_time"] = msg.create_time if msg else 0
         out["last_sender_role"] = msg.sender_role if msg else ""
+        out["last_content"] = msg.content[:50] if msg else ""
         # 查询未读数
         read_state = await db.execute(
             select(ChatReadState.last_read_id).where(
