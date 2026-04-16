@@ -453,6 +453,7 @@ async def active_orders(
             select(ChatReadState.last_read_id).where(
                 ChatReadState.user_id == user.id,
                 ChatReadState.order_id == o.id,
+                ChatReadState.reader_role == user.role,
             )
         )
         last_read_id = read_state.scalar() or 0
@@ -553,6 +554,7 @@ async def get_conversations(
                 select(ChatReadState.last_read_id).where(
                     ChatReadState.user_id == user.id,
                     ChatReadState.order_id == order.id,
+                    ChatReadState.reader_role == user.role,
                 )
             )
             last_read_id = read_state.scalar() or 0
@@ -628,13 +630,14 @@ async def mark_chat_read(
         select(ChatReadState).where(
             ChatReadState.user_id == user.id,
             ChatReadState.order_id == order_id,
+            ChatReadState.reader_role == user.role,
         )
     )
     state = existing.scalar_one_or_none()
     if state:
         state.last_read_id = msg.id
     else:
-        state = ChatReadState(user_id=user.id, order_id=order_id, last_read_id=msg.id)
+        state = ChatReadState(user_id=user.id, order_id=order_id, reader_role=user.role, last_read_id=msg.id)
         db.add(state)
     await db.commit()
     return {"ok": True}

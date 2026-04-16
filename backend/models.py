@@ -85,9 +85,10 @@ class ChatLog(Base):
 
 
 class ChatReadState(Base):
-    __tablename__ = "chat_read_states"
-    __table_args__ = (PrimaryKeyConstraint("user_id", "order_id"),)
+    __tablename__ = "chat_read_states_v2"
+    __table_args__ = (PrimaryKeyConstraint("user_id", "order_id", "reader_role"),)
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"))
+    reader_role: Mapped[str] = mapped_column(String(16), default="")
     last_read_id: Mapped[int] = mapped_column(Integer, default=0)
