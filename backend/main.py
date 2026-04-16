@@ -1,5 +1,6 @@
 import time
 import hashlib
+import json
 import uuid
 import xml.etree.cElementTree as ET
 from contextlib import asynccontextmanager
@@ -755,6 +756,41 @@ async def setup_menu(
     if result.get("errcode", 0) != 0:
         raise HTTPException(400, f"菜单创建失败: {result}")
     return {"msg": "菜单创建成功", "data": result}
+
+
+# ============================================================
+# 商家联系配置
+# ============================================================
+
+CONFIG_FILE = Path(__file__).parent / "contact_config.json"
+
+def _load_contact_config() -> dict:
+    if CONFIG_FILE.exists():
+        try:
+            return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"wechat": "", "phone": ""}
+
+
+@app.get("/config/contact")
+async def get_contact_config():
+    """公开接口：获取商家联系方式"""
+    return _load_contact_config()
+
+
+@app.put("/config/contact")
+async def update_contact_config(
+    wechat: str = "",
+    phone: str = "",
+    x_admin_key: str = Header(..., alias="X-Admin-Key"),
+):
+    """管理员接口：更新商家联系方式"""
+    if x_admin_key != settings.ADMIN_KEY:
+        raise HTTPException(401, "管理员密钥错误")
+    cfg = {"wechat": wechat, "phone": phone}
+    CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
+    return {"msg": "已保存"}
 
 
 # ============================================================

@@ -123,6 +123,9 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 .stat-item { flex: 1; text-align: center; cursor: pointer; }
 .stat-num { font-size: 20px; font-weight: 700; color: var(--text-title); }
 .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.filter-bar { display: flex; gap: 8px; padding: 10px; overflow-x: auto; }
+.filter-tag { flex-shrink: 0; padding: 6px 14px; border-radius: 16px; font-size: 13px; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border); cursor: pointer; }
+.filter-tag.active { color: var(--bg-primary); background: var(--gold); border-color: var(--gold); font-weight: 600; }
 
 /* Vant dark overrides */
 .van-tabbar { background: var(--bg-card) !important; border-top: 1px solid var(--border) !important; padding-bottom: env(safe-area-inset-bottom) !important; }
@@ -184,8 +187,16 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
   <div v-show="activeTab === 1">
     <!-- 订单列表视图 -->
     <div v-show="!currentOrder" class="section-pad-bottom">
-      <div v-if="!orders.length" class="empty-state">暂无订单</div>
-      <div v-for="o in orders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
+      <!-- 筛选栏 -->
+      <div class="filter-bar">
+        <div :class="['filter-tag', orderFilter === null ? 'active' : '']" @click="clearFilter">全部</div>
+        <div :class="['filter-tag', orderFilter === -1 ? 'active' : '']" @click="orderFilter = orderFilter === -1 ? null : -1">咨询</div>
+        <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">待接单</div>
+        <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">进行中</div>
+        <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已完成</div>
+      </div>
+      <div v-if="!filteredOrders.length" class="empty-state">暂无订单</div>
+      <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
         <div class="row-between">
           <span class="title-white">{{ o.good_title || '商品' }}</span>
           <span :class="['order-status', statusClass(o.status)]">{{ statusText(o.status) }}</span>
@@ -288,19 +299,19 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     </div>
     <!-- 订单统计 -->
     <div class="profile-stats">
-      <div class="stat-item" @click="activeTab=1">
+      <div class="stat-item" @click="goToOrders(1)">
         <div class="stat-num">{{ orderStats.pending }}</div>
         <div class="stat-label">待接单</div>
       </div>
-      <div class="stat-item" @click="activeTab=1">
+      <div class="stat-item" @click="goToOrders(2)">
         <div class="stat-num">{{ orderStats.accepted }}</div>
         <div class="stat-label">进行中</div>
       </div>
-      <div class="stat-item" @click="activeTab=1">
+      <div class="stat-item" @click="goToOrders(3)">
         <div class="stat-num">{{ orderStats.completed }}</div>
         <div class="stat-label">已完成</div>
       </div>
-      <div class="stat-item" @click="activeTab=1">
+      <div class="stat-item" @click="goToOrders(-1)">
         <div class="stat-num">{{ orderStats.consult }}</div>
         <div class="stat-label">咨询中</div>
       </div>
@@ -308,7 +319,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     <!-- 快捷功能 -->
     <van-cell-group inset style="margin-top:12px;">
       <van-cell title="联系商家" is-link @click="contactMerchant" />
-      <van-cell title="我的订单" is-link @click="activeTab=1" />
+      <van-cell title="我的订单" is-link @click="goToOrders(null)" />
     </van-cell-group>
   </div>
 
@@ -336,6 +347,28 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
           <van-button type="primary" style="flex:2;" round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ (detailGood.price/100).toFixed(0) }}</van-button>
         </div>
       </div>
+    </div>
+  </van-popup>
+
+  <!-- 联系商家弹窗 -->
+  <van-popup v-model:show="showContact" position="bottom" round :style="{ minHeight: '30%' }">
+    <div style="padding:24px 20px;">
+      <div style="font-size:16px;font-weight:600;color:#ffffff;margin-bottom:20px;">联系商家</div>
+      <div v-if="contactInfo.wechat" style="margin-bottom:16px;">
+        <div style="font-size:13px;color:#b0b0c0;margin-bottom:4px;">微信号</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:15px;color:#ffffff;">{{ contactInfo.wechat }}</span>
+          <van-button size="mini" type="primary" @click="copyText(contactInfo.wechat)">复制</van-button>
+        </div>
+      </div>
+      <div v-if="contactInfo.phone" style="margin-bottom:16px;">
+        <div style="font-size:13px;color:#b0b0c0;margin-bottom:4px;">手机号</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:15px;color:#ffffff;">{{ contactInfo.phone }}</span>
+          <van-button size="mini" type="primary" @click="copyText(contactInfo.phone)">复制</van-button>
+        </div>
+      </div>
+      <div v-if="!contactInfo.wechat && !contactInfo.phone" style="text-align:center;color:#787890;padding:20px 0;">暂未配置联系方式</div>
     </div>
   </van-popup>
 
@@ -467,6 +500,7 @@ const app = createApp({
       return !s[conv.order_id] || conv.last_msg_id > s[conv.order_id];
     }
     const unreadCount = computed(() => conversations.value.filter(c => isUnread(c)).length);
+    const orderFilter = ref(null); // null=全部, -1=咨询, 1=待接单, 2=进行中, 3=已完成
     const orderStats = computed(() => {
       const s = { consult: 0, pending: 0, accepted: 0, completed: 0 };
       for (const o of orders.value) {
@@ -477,8 +511,34 @@ const app = createApp({
       }
       return s;
     });
-    function contactMerchant() {
-      vant.showToast('请联系客服微信');
+    const filteredOrders = computed(() => {
+      if (orderFilter.value === null) return orders.value;
+      return orders.value.filter(o => o.status === orderFilter.value);
+    });
+    function goToOrders(status) {
+      orderFilter.value = status;
+      activeTab.value = 1;
+    }
+    function clearFilter() {
+      orderFilter.value = null;
+    }
+    const showContact = ref(false);
+    const contactInfo = ref({ wechat: '', phone: '' });
+    async function contactMerchant() {
+      try {
+        contactInfo.value = await api('/config/contact');
+      } catch {}
+      showContact.value = true;
+    }
+    function copyText(text) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => vant.showToast('已复制'));
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        vant.showToast('已复制');
+      }
     }
     const orderMessageCache = ref({});
     const convMessageCache = ref({});
@@ -783,12 +843,12 @@ const app = createApp({
     return {
       ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
       chatBox, showBook, bookGood, bookForm, submitting,
-      showDetail, detailGood, detailImages, timeSlots, dateOptions,
+      showDetail, detailGood, detailImages, timeSlots, dateOptions, showContact, contactInfo,
       conversations, activeConv, convMessages, convMsgInput, convChatBox,
       openBook, submitOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
       startConsult,
-      openConversation, closeConversation, sendConvMessage, isUnread,
-      statusText, statusColor, statusClass, roleLabel, formatTime, orderStats, contactMerchant
+      openConversation, closeConversation, sendConvMessage, isUnread, contactMerchant, copyText,
+      statusText, statusColor, statusClass, roleLabel, formatTime, orderStats, orderFilter, filteredOrders, goToOrders, clearFilter
     };
   }
 });
