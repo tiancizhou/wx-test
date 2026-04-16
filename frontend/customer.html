@@ -218,7 +218,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
   </div>
 
   <!-- 我的 -->
-  <div v-show="activeTab === 3" style="padding:30px 16px;">
+  <div v-show="activeTab === 3" class="profile-section">
     <van-cell-group inset>
       <van-cell title="用户" :value="user.nickname || '未设置'" />
       <van-cell title="角色" :value="user.role" />
