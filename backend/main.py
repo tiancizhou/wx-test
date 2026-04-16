@@ -309,12 +309,14 @@ async def pay_create(
     # 真实模式：调微信统一下单
     try:
         notify_url = str(request.base_url).rstrip("/") + "/pay/notify"
+        client_ip = request.client.host if request.client else "127.0.0.1"
         prepay_id = await create_prepay_order(
             order_id=order.id,
             openid=user.openid,
             total_fee=total_fee,
-            description=good.title[:128],
+            description=good.title[:127],
             notify_url=notify_url,
+            client_ip=client_ip,
         )
         pay_params = generate_jsapi_params(prepay_id)
         return {"mock": False, "order_id": order.id, "pay_params": pay_params}

@@ -80,6 +80,7 @@ async def create_prepay_order(
     total_fee: int,
     description: str,
     notify_url: str,
+    client_ip: str = "127.0.0.1",
 ) -> str:
     """
     调用 V3 统一下单 API，返回 prepay_id
@@ -91,7 +92,7 @@ async def create_prepay_order(
     body_obj = {
         "appid": settings.APP_ID,
         "mchid": settings.MCH_ID,
-        "description": description[:128],
+        "description": description[:127],
         "out_trade_no": order_id,
         "notify_url": notify_url,
         "amount": {
@@ -100,6 +101,9 @@ async def create_prepay_order(
         },
         "payer": {
             "openid": openid,
+        },
+        "scene_info": {
+            "payer_client_ip": client_ip,
         },
     }
     body_str = json.dumps(body_obj, separators=(",", ":"))
