@@ -9,30 +9,103 @@
 <script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
 <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
 <style>
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-card: #252540;
+  --bg-card-hover: #2d2d4a;
+  --bg-input: #1e1e36;
+  --bg-chat: #12122a;
+  --gold: #c9a96e;
+  --gold-light: #e0c48a;
+  --text-title: #ffffff;
+  --text-body: #b0b0c0;
+  --text-secondary: #787890;
+  --border: #3a3a5c;
+  --status-success: #4caf88;
+  --status-warning: #d4a03c;
+  --status-danger: #c0564a;
+  --status-info: #5b8dd9;
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-.loading-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #fff; display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.good-card { display: flex; background: #fff; margin: 10px; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-.good-img { width: 130px; height: 130px; object-fit: cover; flex-shrink: 0; }
-.good-info { flex: 1; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; }
-.good-title { font-size: 15px; font-weight: 600; color: #333; }
-.good-desc { font-size: 12px; color: #999; margin-top: 4px; }
-.good-bottom { display: flex; align-items: flex-end; justify-content: space-between; }
-.good-price { color: #e74c3c; font-size: 18px; font-weight: 700; }
-.good-price .unit { font-size: 12px; }
-.good-original { font-size: 12px; color: #bbb; text-decoration: line-through; margin-left: 6px; }
-.good-tag { background: #ff9800; color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
-.chat-wrap { display: flex; flex-direction: column; height: 100vh; background: #f0f0f0; }
+body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: var(--text-body); }
+
+/* Loading */
+.loading-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+
+/* Product Grid */
+.good-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
+.good-card { background: var(--bg-card); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.25); cursor: pointer; transition: transform .15s, box-shadow .15s; }
+.good-card:active { transform: scale(.97); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.good-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+.good-card-info { padding: 10px; }
+.good-card-title { font-size: 14px; font-weight: 600; color: var(--text-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.good-card-bottom { display: flex; align-items: baseline; justify-content: space-between; margin-top: 6px; }
+.good-card-price { color: var(--gold); font-size: 16px; font-weight: 700; }
+.good-card-price .unit { font-size: 11px; }
+.good-card-original { font-size: 11px; color: var(--text-secondary); text-decoration: line-through; margin-left: 4px; }
+.good-card-tag { border: 1px solid var(--gold); color: var(--gold); font-size: 10px; padding: 1px 6px; border-radius: 10px; }
+.good-card-meta { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+/* Order */
+.order-card { background: var(--bg-card); margin: 10px; border-radius: 10px; padding: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.25); cursor: pointer; }
+.order-status { display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 10px; color: #fff; }
+
+/* Chat */
+.chat-wrap { display: flex; flex-direction: column; height: 100vh; background: var(--bg-chat); }
 .chat-messages { flex: 1; overflow-y: auto; padding: 10px; }
-.bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; word-break: break-all; }
-.bubble-left { background: #fff; align-self: flex-start; border-bottom-left-radius: 4px; }
-.bubble-right { background: #95ec69; align-self: flex-end; border-bottom-right-radius: 4px; }
-.bubble-role { font-size: 11px; color: #999; margin-bottom: 2px; }
-.chat-input-bar { display: flex; padding: 8px 10px; background: #fff; border-top: 1px solid #eee; }
-.chat-input-bar input { flex: 1; border: 1px solid #ddd; border-radius: 20px; padding: 8px 14px; font-size: 14px; outline: none; }
-.chat-input-bar button { margin-left: 8px; border: none; background: #07c160; color: #fff; border-radius: 20px; padding: 0 20px; font-size: 14px; }
-.order-card { background: #fff; margin: 10px; border-radius: 10px; padding: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-.order-status { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 4px; color: #fff; }
+.bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; word-break: break-all; color: #e0e0e0; }
+.bubble-left { background: var(--bg-card-hover); align-self: flex-start; border-bottom-left-radius: 4px; }
+.bubble-right { background: #3a5a3a; align-self: flex-end; border-bottom-right-radius: 4px; }
+.bubble-role { font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; }
+.chat-input-bar { display: flex; padding: 8px 10px; background: var(--bg-card); border-top: 1px solid var(--border); }
+.chat-input-bar input { flex: 1; border: 1px solid var(--border); border-radius: 20px; padding: 8px 14px; font-size: 14px; outline: none; background: var(--bg-input); color: var(--text-title); }
+.chat-input-bar input::placeholder { color: var(--text-secondary); }
+.chat-input-bar button { margin-left: 8px; border: none; background: var(--gold); color: var(--bg-primary); border-radius: 20px; padding: 0 20px; font-size: 14px; font-weight: 600; }
+
+/* Detail popup */
+.detail-popup { background: var(--bg-primary); }
+.detail-popup .detail-title { font-size: 20px; font-weight: 700; color: var(--text-title); }
+.detail-popup .detail-price { color: var(--gold); font-size: 26px; font-weight: 700; }
+.detail-popup .detail-original { font-size: 14px; color: var(--text-secondary); text-decoration: line-through; }
+.detail-popup .detail-meta { font-size: 13px; color: var(--text-secondary); }
+.detail-popup .detail-desc { font-size: 14px; color: var(--text-body); line-height: 1.8; white-space: pre-wrap; }
+.detail-popup .detail-img { width: 100%; border-radius: 8px; }
+.detail-cta { position: fixed; bottom: 0; left: 0; right: 0; padding: 12px 16px; background: var(--bg-primary); border-top: 1px solid var(--border); }
+
+/* Booking popup */
+.book-popup { background: var(--bg-card); }
+.book-popup input[type="tel"] { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; outline: none; background: var(--bg-input); color: var(--text-title); }
+.book-popup input::placeholder { color: var(--text-secondary); }
+
+/* Order detail header */
+.detail-header { background: var(--bg-card); padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; }
+.detail-header .back-arrow { font-size: 20px; cursor: pointer; margin-right: 10px; color: var(--gold); }
+
+/* Product card in order detail (clickable) */
+.order-good-card { background: var(--bg-card); padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; cursor: pointer; border-left: 4px solid var(--gold); }
+.order-good-card:active { background: var(--bg-card-hover); }
+
+/* Appointment info */
+.appt-info { background: var(--bg-card); padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.appt-info .label { color: var(--text-title); }
+.appt-info .value { color: var(--text-body); }
+
+/* Profile */
+.profile-section { padding: 30px 16px; }
+
+/* Vant dark overrides */
+.van-tabbar { background: var(--bg-card) !important; border-top: 1px solid var(--border) !important; }
+.van-tabbar-item--active { color: var(--gold) !important; }
+.van-tabbar-item { color: var(--text-secondary) !important; background: transparent !important; }
+.van-popup--bottom { background: var(--bg-primary) !important; }
+.van-button--primary { background: var(--gold) !important; border-color: var(--gold) !important; color: var(--bg-primary) !important; font-weight: 600 !important; }
+.van-cell-group--inset { background: var(--bg-card) !important; margin: 0 !important; border-radius: 10px !important; overflow: hidden; }
+.van-cell { background: var(--bg-card) !important; color: var(--text-body) !important; }
+.van-cell__title { color: var(--text-body) !important; }
+.van-cell__value { color: var(--text-title) !important; }
+.van-cell::after { border-color: var(--border) !important; }
+.van-loading__text { color: var(--gold) !important; }
+.van-loading__spinner .van-loading__dot { background: var(--gold) !important; }
 </style>
 </head>
 <body>
