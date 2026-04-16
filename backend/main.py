@@ -426,7 +426,7 @@ async def create_consult(
     return _order_to_out(order)
 
 
-@app.get("/orders/active", response_model=list[OrderOut])
+@app.get("/orders/active")
 async def active_orders(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(Role.MERCHANT, Role.SERVICE, Role.ADMIN)),
@@ -436,7 +436,19 @@ async def active_orders(
         .where(Order.status.in_([OrderStatus.CONSULTATION, OrderStatus.PENDING, OrderStatus.ACCEPTED]))
         .order_by(Order.create_time.desc())
     )
-    return [_order_to_out(o) for o in result.scalars().all()]
+    orders = []
+    for o in result.scalars().all():
+        out = _order_to_out(o)
+        last_msg = await db.execute(
+            select(ChatLog).where(ChatLog.order_id == o.id)
+            .order_by(ChatLog.id.desc()).limit(1)
+        )
+        msg = last_msg.scalar_one_or_none()
+        out["last_msg_id"] = msg.id if msg else 0
+        out["last_msg_time"] = msg.create_time if msg else 0
+        out["last_sender_role"] = msg.sender_role if msg else ""
+        orders.append(out)
+    return orders
 
 
 @app.post("/orders/{order_id}/accept")
@@ -525,6 +537,7 @@ async def get_conversations(
                 "good_img_url": order.good.img_url if order.good else "",
                 "last_content": msg.content[:50],
                 "last_time": msg.create_time,
+                "last_msg_id": msg.id,
                 "status": order.status,
             })
     conversations.sort(key=lambda x: x["last_time"], reverse=True)
