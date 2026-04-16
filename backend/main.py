@@ -460,7 +460,7 @@ async def active_orders(
             select(func.count()).select_from(ChatLog).where(
                 ChatLog.order_id == o.id,
                 ChatLog.id > last_read_id,
-                ChatLog.sender_id != user.id,
+                ChatLog.sender_role != user.role,
             )
         )
         out["unread_count"] = unread
@@ -560,7 +560,7 @@ async def get_conversations(
                 select(func.count()).select_from(ChatLog).where(
                     ChatLog.order_id == order.id,
                     ChatLog.id > last_read_id,
-                    ChatLog.sender_id != user.id,
+                    ChatLog.sender_role != user.role,
                 )
             )
             conversations.append({
