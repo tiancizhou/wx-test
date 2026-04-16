@@ -65,7 +65,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 .conv-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .conv-title-text { font-weight: 600; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .consult-badge { flex-shrink: 0; font-size: 10px; border: 1px solid var(--gold); color: var(--gold); padding: 1px 6px; border-radius: 8px; }
-.unread-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: #e74c3c; }
+.unread-badge { flex-shrink: 0; min-width: 18px; height: 18px; border-radius: 9px; background: #e74c3c; color: #fff; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
 .status-badge-sm { font-size: 10px; padding: 1px 8px; }
 .time-right { flex-shrink: 0; margin-left: 8px; }
 .single-line-preview { font-size: 13px; color: #b0b0c0; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -154,7 +154,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
   <van-tabbar v-model="activeTab">
     <van-tabbar-item icon="home-o">首页</van-tabbar-item>
     <van-tabbar-item icon="orders-o">订单</van-tabbar-item>
-    <van-tabbar-item icon="chat-o" :badge="unreadCount || ''">消息</van-tabbar-item>
+    <van-tabbar-item icon="chat-o" :dot="!!unreadCount">消息</van-tabbar-item>
     <van-tabbar-item icon="contact">我的</van-tabbar-item>
   </van-tabbar>
 
@@ -254,7 +254,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <div v-for="c in conversations" :key="c.order_id" class="order-card" @click="openConversation(c)">
         <div class="row-between">
           <div class="conv-title-row">
-            <span v-if="c.unread_count" class="unread-dot"></span>
+            <span v-if="c.unread_count" class="unread-badge">{{ c.unread_count }}</span>
             <span class="conv-title-text">{{ c.good_title }}</span>
             <span v-if="c.status === -1" class="consult-badge">咨询</span>
             <span v-else :class="['order-status', statusClass(c.status), 'status-badge-sm']">{{ statusText(c.status) }}</span>
@@ -842,7 +842,7 @@ const app = createApp({
       openBook, submitOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
       startConsult,
       openConversation, closeConversation, sendConvMessage, contactMerchant, copyText,
-      statusText, statusColor, statusClass, roleLabel, formatTime, orderStats, orderFilter, filteredOrders, goToOrders, clearFilter
+      unreadCount, statusText, statusColor, statusClass, roleLabel, formatTime, orderStats, orderFilter, filteredOrders, goToOrders, clearFilter
     };
   }
 });
