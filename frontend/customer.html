@@ -34,8 +34,8 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 
 /* Product Grid */
 .good-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
-.good-card { background: var(--bg-card); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.25); cursor: pointer; transition: transform .15s, box-shadow .15s; }
-.good-card:active { transform: scale(.97); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.good-card { background: var(--bg-card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); cursor: pointer; transition: transform .15s, background-color .15s; }
+.good-card:active { transform: scale(.97); background: var(--bg-card-hover); }
 .good-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
 .good-card-info { padding: 10px; }
 .good-card-title { font-size: 14px; font-weight: 600; color: var(--text-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -47,8 +47,13 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 .good-card-meta { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
 
 /* Order */
-.order-card { background: var(--bg-card); margin: 10px; border-radius: 10px; padding: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.25); cursor: pointer; }
+.order-card { background: var(--bg-card); margin: 10px; border-radius: 10px; padding: 14px; border: 1px solid var(--border); cursor: pointer; }
 .order-status { display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 10px; color: #fff; }
+.status-consult { background: #5b8dd9; }
+.status-unpaid { background: #787890; }
+.status-pending { background: #d4a03c; }
+.status-accepted { background: #07c160; }
+.status-completed { background: #787890; }
 
 /* Chat */
 .chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 50px - env(safe-area-inset-bottom)); background: var(--bg-chat); }
@@ -157,7 +162,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <div v-for="o in orders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span style="font-weight:600;color:#ffffff;">{{ o.good_title || '商品' }}</span>
-          <span class="order-status" :style="{background: statusColor(o.status)}">{{ statusText(o.status) }}</span>
+          <span :class="['order-status', statusClass(o.status)]">{{ statusText(o.status) }}</span>
         </div>
         <div style="font-size:13px;color:#b0b0c0;margin-top:8px;">
           {{ o.phone }} · {{ o.appointment_time }}
@@ -170,7 +175,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <div class="detail-header">
         <span class="back-arrow" @click="closeOrderDetail">‹</span>
         <span style="font-weight:600;color:#ffffff;">订单详情</span>
-        <span class="order-status" :style="{background: currentOrder ? statusColor(currentOrder.status) : '#787890',marginLeft:'auto'}">{{ currentOrder ? statusText(currentOrder.status) : '' }}</span>
+        <span :class="['order-status', currentOrder ? statusClass(currentOrder.status) : 'status-unpaid']" style="margin-left:auto;">{{ currentOrder ? statusText(currentOrder.status) : '' }}</span>
       </div>
       <!-- 商品信息（可点击查看详情） -->
       <div v-if="currentOrder" class="order-good-card" @click="viewOrderGood(currentOrder)">
@@ -215,7 +220,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
           <div style="display:flex;align-items:center;gap:6px;min-width:0;">
             <span style="font-weight:600;color:#ffffff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ c.good_title }}</span>
             <span v-if="c.status === -1" style="flex-shrink:0;font-size:10px;border:1px solid var(--gold);color:var(--gold);padding:1px 6px;border-radius:8px;">咨询</span>
-            <span v-else class="order-status" :style="{background: statusColor(c.status), fontSize:'10px', padding:'1px 8px'}">{{ statusText(c.status) }}</span>
+            <span v-else :class="['order-status', statusClass(c.status)]" style="font-size:10px;padding:1px 8px;">{{ statusText(c.status) }}</span>
           </div>
           <span style="flex-shrink:0;font-size:11px;color:#787890;margin-left:8px;">{{ formatTime(c.last_time) }}</span>
         </div>
@@ -656,6 +661,7 @@ const app = createApp({
 
     function statusText(s) { return {'-1':'咨询',0:'待支付',1:'待接单',2:'已接单',3:'已完成'}[s] ?? '未知'; }
     function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#787890'}[s] ?? '#787890'; }
+    function statusClass(s) { return {'-1':'status-consult',0:'status-unpaid',1:'status-pending',2:'status-accepted',3:'status-completed'}[s] ?? 'status-unpaid'; }
     function roleLabel(r) { return { CUSTOMER: '客户', MERCHANT: '商家', SERVICE: '客服' }[r] || r; }
     function formatTime(ts) {
       const d = new Date(ts * 1000);
@@ -697,7 +703,7 @@ const app = createApp({
       openBook, submitOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
       startConsult,
       openConversation, closeConversation, sendConvMessage,
-      statusText, statusColor, roleLabel, formatTime
+      statusText, statusColor, statusClass, roleLabel, formatTime
     };
   }
 });
