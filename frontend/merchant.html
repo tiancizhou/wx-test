@@ -449,7 +449,7 @@ async function wxLogin() {
     }
   }
   const redirectUri = encodeURIComponent(BASE_URL + location.pathname);
-  location.href = `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_base&state=merchant#wechat_redirect`;
+  location.href = `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_userinfo&state=merchant#wechat_redirect`;
 }
 
 async function wxJSSDKInit() {

@@ -69,7 +69,7 @@ const app = createApp({
 
         // 3. 都没有 → 跳转微信 OAuth
         const redirectUri = encodeURIComponent(BASE_URL + location.pathname);
-        location.href = `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_base&state=home#wechat_redirect`;
+        location.href = `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_userinfo&state=home#wechat_redirect`;
       } catch (e) {
         error.value = '登录失败: ' + e.message;
         loading.value = false;
