@@ -83,7 +83,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
     <div v-for="o in orders" :key="o.id" class="order-card" @click="openChat(o)">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div style="display:flex;align-items:center;gap:6px;">
-          <span v-if="isUnread(o)" class="unread-dot"></span>
+          <span v-if="o.unread_count" class="unread-dot"></span>
           <span style="font-weight:600;color:var(--text-title);">{{ o.good_title || o.id.slice(-8) }}</span>
         </div>
         <span class="order-status" :style="{background: o.status === -1 ? '#5b8dd9' : statusColor(o.status)}">{{ o.status === -1 ? '咨询' : statusText(o.status) }}</span>
@@ -296,17 +296,10 @@ const app = createApp({
     let pollTimer = null;
 
     // ---- 未读追踪 ----
-    const READ_KEY = 'wx_merchant_read_msg';
-    function getReadState() { try { return JSON.parse(localStorage.getItem(READ_KEY) || '{}'); } catch { return {}; } }
-    function markRead(orderId, msgId) {
-      const s = getReadState(); s[orderId] = msgId; localStorage.setItem(READ_KEY, JSON.stringify(s));
+    const unreadCount = computed(() => orders.value.reduce((sum, o) => sum + (o.unread_count || 0), 0));
+    async function markRead(orderId) {
+      try { await api(`/chat/read/${orderId}`, { method: 'POST' }); } catch {}
     }
-    function isUnread(o) {
-      if (!o.last_msg_id) return false;
-      const s = getReadState();
-      return !s[o.id] || o.last_msg_id > s[o.id];
-    }
-    const unreadCount = computed(() => orders.value.filter(o => isUnread(o)).length);
 
     // 商品表单
     const showGoodForm = ref(false);
@@ -355,7 +348,7 @@ const app = createApp({
     async function loadGoods() { goods.value = await api('/goods/all'); }
     async function loadChat(orderId) {
       messages.value = await api(`/chat/${orderId}?after_id=0`);
-      if (messages.value.length) markRead(orderId, messages.value[messages.value.length - 1].id);
+      if (messages.value.length) markRead(orderId);
       await nextTick();
       if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
     }
@@ -365,7 +358,7 @@ const app = createApp({
       const newMsgs = await api(`/chat/${currentOrder.value.id}?after_id=${lastId}`);
       if (newMsgs.length) {
         messages.value.push(...newMsgs);
-        markRead(currentOrder.value.id, messages.value[messages.value.length - 1].id);
+        markRead(currentOrder.value.id);
         await nextTick();
         if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
       }
@@ -381,7 +374,7 @@ const app = createApp({
         const sent = await api('/chat', { method: 'POST', body: JSON.stringify({ order_id: currentOrder.value.id, content: msgInput.value }) });
         msgInput.value = '';
         messages.value.push(sent);
-        markRead(currentOrder.value.id, sent.id);
+        markRead(currentOrder.value.id);
         await nextTick();
         if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
@@ -482,7 +475,7 @@ const app = createApp({
     return {
       ready, activeTab, orders, goods, currentOrder, messages, msgInput, chatBox,
       showGoodForm, isEditGood, savingGood, goodForm,
-      openChat, closeChat, acceptOrder, completeOrder, sendMessage, isUnread,
+      openChat, closeChat, acceptOrder, completeOrder, sendMessage,
       openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,
       uploadCover, uploadDetail, removeDetailImg,
       statusText, statusColor, roleLabel, formatTime

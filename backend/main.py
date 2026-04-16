@@ -11,12 +11,12 @@ from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, init_db
-from models import User, Good, Order, OrderStatus, ChatLog, Role
+from models import User, Good, Order, OrderStatus, ChatLog, ChatReadState, Role
 from schemas import GoodOut, GoodUpdate, GoodCreate, OrderCreate, ConsultCreate, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
 from deps import get_current_user, require_role
 
@@ -448,6 +448,22 @@ async def active_orders(
         out["last_msg_id"] = msg.id if msg else 0
         out["last_msg_time"] = msg.create_time if msg else 0
         out["last_sender_role"] = msg.sender_role if msg else ""
+        # 查询未读数
+        read_state = await db.execute(
+            select(ChatReadState.last_read_id).where(
+                ChatReadState.user_id == user.id,
+                ChatReadState.order_id == o.id,
+            )
+        )
+        last_read_id = read_state.scalar() or 0
+        unread = await db.scalar(
+            select(func.count()).select_from(ChatLog).where(
+                ChatLog.order_id == o.id,
+                ChatLog.id > last_read_id,
+                ChatLog.sender_id != user.id,
+            )
+        )
+        out["unread_count"] = unread
         orders.append(out)
     return orders
 
@@ -532,6 +548,21 @@ async def get_conversations(
         )
         msg = last_msg.scalar_one_or_none()
         if msg:
+            # 查询未读数
+            read_state = await db.execute(
+                select(ChatReadState.last_read_id).where(
+                    ChatReadState.user_id == user.id,
+                    ChatReadState.order_id == order.id,
+                )
+            )
+            last_read_id = read_state.scalar() or 0
+            unread = await db.scalar(
+                select(func.count()).select_from(ChatLog).where(
+                    ChatLog.order_id == order.id,
+                    ChatLog.id > last_read_id,
+                    ChatLog.sender_id != user.id,
+                )
+            )
             conversations.append({
                 "order_id": order.id,
                 "good_title": order.good.title if order.good else "商品",
@@ -540,6 +571,7 @@ async def get_conversations(
                 "last_time": msg.create_time,
                 "last_msg_id": msg.id,
                 "status": order.status,
+                "unread_count": unread,
             })
     conversations.sort(key=lambda x: x["last_time"], reverse=True)
     return conversations
@@ -576,6 +608,35 @@ async def send_chat(
     await db.commit()
     await db.refresh(log)
     return log
+
+
+@app.post("/chat/read/{order_id}")
+async def mark_chat_read(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """标记该用户在此会话中已读（记录最新消息 id）"""
+    last_msg = await db.execute(
+        select(ChatLog).where(ChatLog.order_id == order_id).order_by(ChatLog.id.desc()).limit(1)
+    )
+    msg = last_msg.scalar_one_or_none()
+    if not msg:
+        return {"ok": True}
+    existing = await db.execute(
+        select(ChatReadState).where(
+            ChatReadState.user_id == user.id,
+            ChatReadState.order_id == order_id,
+        )
+    )
+    state = existing.scalar_one_or_none()
+    if state:
+        state.last_read_id = msg.id
+    else:
+        state = ChatReadState(user_id=user.id, order_id=order_id, last_read_id=msg.id)
+        db.add(state)
+    await db.commit()
+    return {"ok": True}
 
 
 

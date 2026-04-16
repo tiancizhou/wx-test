@@ -254,7 +254,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <div v-for="c in conversations" :key="c.order_id" class="order-card" @click="openConversation(c)">
         <div class="row-between">
           <div class="conv-title-row">
-            <span v-if="isUnread(c)" class="unread-dot"></span>
+            <span v-if="c.unread_count" class="unread-dot"></span>
             <span class="conv-title-text">{{ c.good_title }}</span>
             <span v-if="c.status === -1" class="consult-badge">咨询</span>
             <span v-else :class="['order-status', statusClass(c.status), 'status-badge-sm']">{{ statusText(c.status) }}</span>
@@ -500,17 +500,10 @@ const app = createApp({
     }
 
     // ---- 未读追踪 ----
-    const READ_KEY = 'wx_read_msg';
-    function getReadState() { try { return JSON.parse(localStorage.getItem(READ_KEY) || '{}'); } catch { return {}; } }
-    function markRead(orderId, msgId) {
-      const s = getReadState(); s[orderId] = msgId; localStorage.setItem(READ_KEY, JSON.stringify(s));
+    const unreadCount = computed(() => conversations.value.reduce((sum, c) => sum + (c.unread_count || 0), 0));
+    async function markRead(orderId) {
+      try { await api(`/chat/read/${orderId}`, { method: 'POST' }); } catch {}
     }
-    function isUnread(conv) {
-      if (!conv.last_msg_id) return false;
-      const s = getReadState();
-      return !s[conv.order_id] || conv.last_msg_id > s[conv.order_id];
-    }
-    const unreadCount = computed(() => conversations.value.filter(c => isUnread(c)).length);
     const orderFilter = ref(null); // null=全部, -1=咨询, 1=待接单, 2=进行中, 3=已完成
     const orderStats = computed(() => {
       const s = { consult: 0, pending: 0, accepted: 0, completed: 0 };
@@ -593,7 +586,7 @@ const app = createApp({
       const loaded = await api(`/chat/${orderId}?after_id=0`);
       messages.value = loaded;
       orderMessageCache.value[orderId] = [...loaded];
-      if (loaded.length) markRead(orderId, loaded[loaded.length - 1].id);
+      if (loaded.length) markRead(orderId);
       await nextTick();
       if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
     }
@@ -609,7 +602,7 @@ const app = createApp({
           }
           messages.value.push(...newMsgs);
           orderMessageCache.value[currentOrder.value.id] = [...messages.value];
-          markRead(currentOrder.value.id, messages.value[messages.value.length - 1].id);
+          markRead(currentOrder.value.id);
           await nextTick();
           if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
         }
@@ -713,7 +706,7 @@ const app = createApp({
         msgInput.value = '';
         messages.value.push(sent);
         orderMessageCache.value[currentOrder.value.id] = [...messages.value];
-        markRead(currentOrder.value.id, sent.id);
+        markRead(currentOrder.value.id);
         await nextTick();
         if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
@@ -749,8 +742,8 @@ const app = createApp({
       const loaded = await api(`/chat/${conv.order_id}?after_id=0`);
       if (!sameMessages(cached, loaded)) convMessages.value = loaded;
       convMessageCache.value[conv.order_id] = [...loaded];
-      if (loaded.length) markRead(conv.order_id, loaded[loaded.length - 1].id);
-      else if (conv.last_msg_id) markRead(conv.order_id, conv.last_msg_id);
+      if (loaded.length) markRead(conv.order_id);
+      else if (conv.last_msg_id) markRead(conv.order_id);
       await nextTick();
       if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
     }
@@ -770,7 +763,7 @@ const app = createApp({
         }
         convMessages.value.push(...newMsgs);
         convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
-        markRead(activeConv.value.order_id, convMessages.value[convMessages.value.length - 1].id);
+        markRead(activeConv.value.order_id);
         await nextTick();
         if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       }
@@ -805,7 +798,7 @@ const app = createApp({
         convMsgInput.value = '';
         convMessages.value.push(sent);
         convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
-        markRead(activeConv.value.order_id, sent.id);
+        markRead(activeConv.value.order_id);
         await nextTick();
         if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
@@ -869,7 +862,7 @@ const app = createApp({
       conversations, activeConv, convMessages, convMsgInput, convChatBox,
       openBook, submitOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
       startConsult,
-      openConversation, closeConversation, sendConvMessage, isUnread, contactMerchant, copyText,
+      openConversation, closeConversation, sendConvMessage, contactMerchant, copyText,
       statusText, statusColor, statusClass, roleLabel, formatTime, orderStats, orderFilter, filteredOrders, goToOrders, clearFilter
     };
   }

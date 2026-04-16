@@ -2,7 +2,7 @@ import time
 import uuid
 from enum import IntEnum
 
-from sqlalchemy import String, Integer, Boolean, Text, ForeignKey, DateTime, Enum as SAEnum
+from sqlalchemy import String, Integer, Boolean, Text, ForeignKey, DateTime, Enum as SAEnum, PrimaryKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -84,3 +84,12 @@ class ChatLog(Base):
     create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
 
     order: Mapped["Order"] = relationship(back_populates="chat_logs")
+
+
+class ChatReadState(Base):
+    __tablename__ = "chat_read_states"
+    __table_args__ = (PrimaryKeyConstraint("user_id", "order_id"),)
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"))
+    last_read_id: Mapped[int] = mapped_column(Integer, default=0)
