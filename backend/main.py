@@ -502,7 +502,13 @@ async def get_all_chat(
     user: User = Depends(get_current_user),
 ):
     """客户：获取所有订单的合并聊天记录"""
-    order_ids = select(Order.id).where(Order.customer_id == user.id)
+    # 先显式查出该用户的所有 order_id，避免 SQLite 异步子查询问题
+    order_result = await db.execute(
+        select(Order.id).where(Order.customer_id == user.id)
+    )
+    order_ids = [row[0] for row in order_result.fetchall()]
+    if not order_ids:
+        return []
     result = await db.execute(
         select(ChatLog)
         .where(ChatLog.order_id.in_(order_ids), ChatLog.id > after_id)

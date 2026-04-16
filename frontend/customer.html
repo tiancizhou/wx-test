@@ -532,12 +532,13 @@ const app = createApp({
 
     async function loadAllChat() {
       try {
-        allMessages.value = await api('/chat/all?after_id=0');
+        const msgs = await api('/chat/all?after_id=0');
+        allMessages.value = msgs;
         await nextTick();
         if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
       } catch (e) {
         console.error('loadAllChat error:', e);
-        vant.showToast('加载消息失败');
+        vant.showToast('加载失败: ' + e.message);
       }
     }
     async function pollAllChat() {
