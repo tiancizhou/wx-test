@@ -260,7 +260,7 @@ async def upload_image(
 # 支付
 # ============================================================
 
-from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify
+from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify, query_order, create_refund, decrypt_refund_notify
 
 
 @app.post("/pay/create")
@@ -358,9 +358,91 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
     return JSONResponse({"code": "SUCCESS", "message": ""})
 
 
-# ============================================================
-# 订单
-# ============================================================
+@app.post("/pay/query/{order_id}")
+async def pay_query(order_id: str, db: AsyncSession = Depends(get_db)):
+    """查询订单支付状态（调微信 V3 查单 API）"""
+    if settings.PAY_MOCK:
+        return {"mock": True, "trade_state": "SUCCESS"}
+    try:
+        result = await query_order(order_id)
+        return {"mock": False, **result}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post("/pay/refund/{order_id}")
+async def pay_refund(
+    order_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """申请退款"""
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.good))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "订单不存在")
+    if order.status not in (OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.COMPLETED):
+        raise HTTPException(400, "订单状态不支持退款")
+
+    body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    refund_amount = body.get("refund_amount", order.total_fee)
+    reason = body.get("reason", "商户退款")
+
+    if settings.PAY_MOCK:
+        order.status = OrderStatus.REFUNDED
+        if order.good:
+            order.good.sales = max(0, order.good.sales - (order.quantity or 1))
+        await db.commit()
+        return {"mock": True, "status": "SUCCESS"}
+
+    out_refund_no = f"R{order_id}"
+    notify_url = str(request.base_url).rstrip("/") + "/refund/notify"
+    try:
+        resp = await create_refund(
+            out_trade_no=order.id,
+            out_refund_no=out_refund_no,
+            total=order.total_fee,
+            refund=refund_amount,
+            notify_url=notify_url,
+            reason=reason,
+            transaction_id=order.transaction_id,
+        )
+        order.status = OrderStatus.REFUNDING
+        order.refund_id = resp.get("refund_id", "")
+        await db.commit()
+        return {"mock": False, "status": resp.get("status", "PROCESSING"), "refund_id": resp.get("refund_id")}
+    except Exception as e:
+        raise HTTPException(500, f"退款申请失败: {e}")
+
+
+@app.post("/refund/notify")
+async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
+    """退款结果回调通知"""
+    body = (await request.body()).decode("utf-8")
+    data = decrypt_refund_notify(body)
+    if not data:
+        return JSONResponse({"code": "FAIL", "message": "解密失败"}, status_code=400)
+
+    resource = data.get("resource", {})
+    order_id = resource.get("out_trade_no", "")
+    refund_status = resource.get("refund_status", "")
+
+    if refund_status == "SUCCESS":
+        result = await db.execute(
+            select(Order).where(Order.id == order_id).options(selectinload(Order.good))
+        )
+        order = result.scalar_one_or_none()
+        if order:
+            order.status = OrderStatus.REFUNDED
+            order.refund_id = resource.get("refund_id", order.refund_id)
+            if order.good:
+                order.good.sales = max(0, order.good.sales - (order.quantity or 1))
+            await db.commit()
+
+    return JSONResponse({"code": "SUCCESS", "message": ""})
 
 @app.post("/orders", response_model=OrderOut)
 async def create_order(

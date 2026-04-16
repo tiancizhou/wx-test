@@ -27,6 +27,7 @@ async def init_db():
             ("orders", "good_id", "INTEGER DEFAULT 0"),
             ("orders", "quantity", "INTEGER DEFAULT 1"),
             ("orders", "transaction_id", "TEXT DEFAULT ''"),
+            ("orders", "refund_id", "TEXT DEFAULT ''"),
         ]
         for table, column, col_type in alter_statements:
             try:

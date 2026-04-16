@@ -19,6 +19,8 @@ class OrderStatus(IntEnum):
     PENDING = 1         # 待接单
     ACCEPTED = 2        # 已接单
     COMPLETED = 3       # 已完成
+    REFUNDING = 4       # 退款中
+    REFUNDED = 5        # 已退款
 
 
 class User(Base):
@@ -65,6 +67,7 @@ class Order(Base):
     total_fee: Mapped[int] = mapped_column(Integer, default=0, comment="金额，单位分")
     quantity: Mapped[int] = mapped_column(Integer, default=1, comment="商品数量")
     transaction_id: Mapped[str] = mapped_column(String(32), default="", comment="微信支付订单号")
+    refund_id: Mapped[str] = mapped_column(String(32), default="", comment="微信退款单号")
     status: Mapped[int] = mapped_column(Integer, default=OrderStatus.UNPAID)
     create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
 

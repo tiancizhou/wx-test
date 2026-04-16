@@ -5,6 +5,7 @@ import uuid
 import json
 import base64
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 from Crypto.PublicKey import RSA
@@ -228,4 +229,107 @@ def verify_pay_notify(
         return None
 
     # 没有 ciphertext 时（非加密场景）直接返回
+    return data
+
+
+# ---------------------------------------------------------------------------
+# V3 查询订单（商户订单号）
+# ---------------------------------------------------------------------------
+
+async def query_order(out_trade_no: str) -> dict:
+    """
+    通过商户订单号查询订单
+    GET /v3/pay/transactions/out-trade-no/{out_trade_no}?mchid={mchid}
+    返回: {trade_state, transaction_id, ...}
+    """
+    url_path = f"/v3/pay/transactions/out-trade-no/{quote(out_trade_no, safe='')}"
+    url = f"https://api.mch.weixin.qq.com{url_path}?mchid={settings.MCH_ID}"
+
+    auth_header = _make_v3_auth_header("GET", url_path, "")
+
+    headers = {
+        "Accept": "application/json",
+        "Authorization": auth_header,
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=headers, timeout=10)
+
+    if resp.status_code != 200:
+        raise Exception(f"查询订单失败 (HTTP {resp.status_code}): {resp.text}")
+
+    return resp.json()
+
+
+# ---------------------------------------------------------------------------
+# V3 申请退款
+# ---------------------------------------------------------------------------
+
+async def create_refund(
+    out_trade_no: str,
+    out_refund_no: str,
+    total: int,
+    refund: int,
+    notify_url: str,
+    reason: str = "",
+    transaction_id: str = "",
+) -> dict:
+    """
+    申请退款
+    POST /v3/refund/domestic/refunds
+    返回: {refund_id, status, ...}
+    """
+    url = "https://api.mch.weixin.qq.com/v3/refund/domestic/refunds"
+    url_path = "/v3/refund/domestic/refunds"
+
+    body_obj = {
+        "out_trade_no": out_trade_no,
+        "out_refund_no": out_refund_no,
+        "amount": {
+            "refund": refund,
+            "total": total,
+            "currency": "CNY",
+        },
+        "notify_url": notify_url,
+    }
+    if transaction_id:
+        body_obj["transaction_id"] = transaction_id
+    if reason:
+        body_obj["reason"] = reason[:80]
+
+    body_str = json.dumps(body_obj, separators=(",", ":"))
+    auth_header = _make_v3_auth_header("POST", url_path, body_str)
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": auth_header,
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, content=body_str, headers=headers, timeout=10)
+
+    if resp.status_code != 200:
+        raise Exception(f"申请退款失败 (HTTP {resp.status_code}): {resp.text}")
+
+    return resp.json()
+
+
+def decrypt_refund_notify(body: str) -> dict | None:
+    """
+    解密退款回调通知（与支付回调使用相同的 AES-256-GCM 解密）
+    返回: {event_type, resource: {out_trade_no, refund_status, ...}}
+    """
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+    resource = data.get("resource", {})
+    if resource.get("ciphertext"):
+        decrypted = _decrypt_resource(resource)
+        if decrypted:
+            return {"event_type": data.get("event_type"), "resource": decrypted}
+        return None
+
     return data
