@@ -227,24 +227,24 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 
   <!-- 商品详情弹窗 -->
   <van-popup v-model:show="showDetail" position="bottom" round :style="{ minHeight: '70%' }">
-    <div style="max-height:85vh;overflow-y:auto;">
+    <div class="detail-popup" style="max-height:85vh;overflow-y:auto;">
       <div v-if="detailGood" style="padding-bottom:80px;">
         <img :src="detailGood.img_url" style="width:100%;max-height:300px;object-fit:cover;">
         <div style="padding:16px;">
-          <div style="font-size:18px;font-weight:700;">{{ detailGood.title }}</div>
+          <div class="detail-title">{{ detailGood.title }}</div>
           <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;">
-            <span style="color:#e74c3c;font-size:24px;font-weight:700;">¥{{ (detailGood.price/100).toFixed(0) }}</span>
-            <span v-if="detailGood.original_price" style="font-size:14px;color:#bbb;text-decoration:line-through;">¥{{ (detailGood.original_price/100).toFixed(0) }}</span>
-            <span style="font-size:13px;color:#999;margin-left:auto;">已售 {{ detailGood.sales || 0 }} · {{ detailGood.duration }}分钟</span>
+            <span class="detail-price">¥{{ (detailGood.price/100).toFixed(0) }}</span>
+            <span v-if="detailGood.original_price" class="detail-original">¥{{ (detailGood.original_price/100).toFixed(0) }}</span>
+            <span class="detail-meta" style="margin-left:auto;">已售 {{ detailGood.sales || 0 }} · {{ detailGood.duration }}分钟</span>
           </div>
-          <div style="font-size:14px;color:#666;margin-top:16px;line-height:1.6;white-space:pre-wrap;">{{ detailGood.description }}</div>
+          <div class="detail-desc" style="margin-top:16px;">{{ detailGood.description }}</div>
           <div v-if="detailImages.length" style="margin-top:16px;">
             <div v-for="(img, i) in detailImages" :key="i" style="margin-bottom:8px;">
-              <img :src="img" style="width:100%;border-radius:8px;" @click="previewImage(i)">
+              <img :src="img" class="detail-img" @click="previewImage(i)">
             </div>
           </div>
         </div>
-        <div style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:#fff;border-top:1px solid #eee;">
+        <div class="detail-cta">
           <van-button type="primary" block round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ (detailGood.price/100).toFixed(0) }}</van-button>
         </div>
       </div>
@@ -253,26 +253,26 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 
   <!-- 下单弹窗 -->
   <van-popup v-model:show="showBook" position="bottom" round :style="{ minHeight: '50%' }">
-    <div style="padding:20px;">
-      <div style="font-size:16px;font-weight:600;margin-bottom:16px;">下单 {{ bookGood?.title }}</div>
+    <div class="book-popup" style="padding:20px;">
+      <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#ffffff;">下单 {{ bookGood?.title }}</div>
       <div style="margin-bottom:12px;">
-        <div style="font-size:13px;color:#666;margin-bottom:4px;">手机号 *</div>
-        <input v-model="bookForm.phone" type="tel" placeholder="请输入手机号" style="width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:14px;outline:none;">
+        <div style="font-size:13px;color:#b0b0c0;margin-bottom:4px;">手机号 *</div>
+        <input v-model="bookForm.phone" type="tel" placeholder="请输入手机号">
       </div>
       <div style="margin-bottom:12px;">
-        <div style="font-size:13px;color:#666;margin-bottom:6px;">选择日期 *</div>
+        <div style="font-size:13px;color:#b0b0c0;margin-bottom:6px;">选择日期 *</div>
         <div style="display:flex;gap:8px;">
           <div v-for="d in dateOptions" :key="d.value" @click="bookForm.date=d.value"
-               :style="{flex:1,textAlign:'center',padding:'10px 0',borderRadius:8,border: bookForm.date===d.value?'2px solid #07c160':'1px solid #ddd',color:bookForm.date===d.value?'#07c160':'#666',fontWeight:bookForm.date===d.value?600:400,fontSize:13,cursor:'pointer'}">
+               :style="{flex:1,textAlign:'center',padding:'10px 0',borderRadius:8,border: bookForm.date===d.value?'2px solid #c9a96e':'1px solid #3a3a5c',color:bookForm.date===d.value?'#c9a96e':'#b0b0c0',fontWeight:bookForm.date===d.value?600:400,fontSize:13,cursor:'pointer',background:bookForm.date===d.value?'rgba(201,169,110,.1)':'transparent'}">
             {{ d.label }}
           </div>
         </div>
       </div>
       <div style="margin-bottom:16px;">
-        <div style="font-size:13px;color:#666;margin-bottom:6px;">选择时段 *</div>
+        <div style="font-size:13px;color:#b0b0c0;margin-bottom:6px;">选择时段 *</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;">
           <div v-for="s in timeSlots" :key="s" @click="bookForm.timeSlot=s"
-               :style="{padding:'8px 14px',borderRadius:8,border:bookForm.timeSlot===s?'2px solid #07c160':'1px solid #ddd',color:bookForm.timeSlot===s?'#07c160':'#666',fontWeight:bookForm.timeSlot===s?600:400,fontSize:13,cursor:'pointer'}">
+               :style="{padding:'8px 14px',borderRadius:8,border:bookForm.timeSlot===s?'2px solid #c9a96e':'1px solid #3a3a5c',color:bookForm.timeSlot===s?'#c9a96e':'#b0b0c0',fontWeight:bookForm.timeSlot===s?600:400,fontSize:13,cursor:'pointer',background:bookForm.timeSlot===s?'rgba(201,169,110,.1)':'transparent'}">
             {{ s }}
           </div>
         </div>
