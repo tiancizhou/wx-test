@@ -615,7 +615,7 @@ const app = createApp({
         }
       } else if (activeTab.value === 2 && activeConv.value) {
         await pollConvChat();
-      } else if (activeTab.value === 2) {
+      } else {
         await loadConversations();
       }
     }
@@ -849,6 +849,7 @@ const app = createApp({
         loadGoods();
         loadOrders();
         loadMe();
+        loadConversations();
         pollTimer = setInterval(pollChat, 5000);
         // WKWebView keyboard: scroll chat to bottom when window resizes (keyboard up/down)
         window.addEventListener('resize', () => {
