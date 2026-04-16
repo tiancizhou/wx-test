@@ -398,8 +398,12 @@ const app = createApp({
       goodForm.value.detailImages.splice(i, 1);
     }
 
-    async function loadOrders() { orders.value = await api('/orders/active'); }
-    async function loadGoods() { goods.value = await api('/goods/all'); }
+    async function loadOrders() {
+      try { orders.value = await api('/orders/active'); } catch (e) { console.error('loadOrders:', e); }
+    }
+    async function loadGoods() {
+      try { goods.value = await api('/goods/all'); } catch (e) { console.error('loadGoods:', e); }
+    }
     async function loadChat(orderId) {
       messages.value = await api(`/chat/${orderId}?after_id=0`);
       if (messages.value.length) markRead(orderId);
