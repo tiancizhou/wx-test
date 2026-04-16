@@ -433,7 +433,7 @@ async def active_orders(
 ):
     result = await db.execute(
         select(Order).options(selectinload(Order.good))
-        .where(Order.status.in_([OrderStatus.PENDING, OrderStatus.ACCEPTED]))
+        .where(Order.status.in_([OrderStatus.CONSULTATION, OrderStatus.PENDING, OrderStatus.ACCEPTED]))
         .order_by(Order.create_time.desc())
     )
     return [_order_to_out(o) for o in result.scalars().all()]
