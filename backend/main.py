@@ -22,8 +22,9 @@ from deps import get_current_user, require_role
 
 
 def _order_to_out(order: Order) -> dict:
-    """将 Order ORM 对象转为带商品信息的字典"""
+    """将 Order ORM 对象转为带商品和客户信息的字典"""
     good = order.good
+    customer = order.customer
     return {
         "id": order.id,
         "customer_id": order.customer_id,
@@ -37,6 +38,7 @@ def _order_to_out(order: Order) -> dict:
         "good_title": good.title if good else "",
         "good_img_url": good.img_url if good else "",
         "good_duration": good.duration if good else 0,
+        "customer_nickname": customer.nickname if customer else "",
     }
 from wechat.config import settings
 from wechat.token import get_jssdk_signature
@@ -434,7 +436,7 @@ async def active_orders(
     user: User = Depends(require_role(Role.MERCHANT)),
 ):
     result = await db.execute(
-        select(Order).options(selectinload(Order.good))
+        select(Order).options(selectinload(Order.good), selectinload(Order.customer))
         .order_by(Order.create_time.desc())
     )
     orders = []

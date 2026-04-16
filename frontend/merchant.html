@@ -199,7 +199,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         <div v-for="m in messages" :key="m.id"
              :class="['bubble', m.sender_role==='MERCHANT' ? 'bubble-right' : 'bubble-left']"
              style="display:flex;flex-direction:column;">
-          <div class="bubble-role">{{ roleLabel(m.sender_role) }}</div>
+          <div class="bubble-role">{{ m.sender_role === 'MERCHANT' ? '商家' : (currentOrder?.customer_nickname || '客户') }}</div>
           <div>{{ m.content }}</div>
           <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
         </div>
