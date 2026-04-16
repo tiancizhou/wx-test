@@ -201,9 +201,9 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <div class="filter-bar">
         <div :class="['filter-tag', orderFilter === null ? 'active' : '']" @click="clearFilter">全部</div>
         <div :class="['filter-tag', orderFilter === -1 ? 'active' : '']" @click="orderFilter = orderFilter === -1 ? null : -1">咨询</div>
-        <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">待接单</div>
-        <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">进行中</div>
-        <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已完成</div>
+        <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">已下单</div>
+        <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">已完成</div>
+        <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已退款</div>
       </div>
       <div v-if="!filteredOrders.length" class="empty-state">暂无订单</div>
       <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
@@ -243,7 +243,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         <div v-if="currentOrder.quantity > 1" style="font-size:13px;margin-top:4px;"><span class="label">数量：</span><span class="value">{{ currentOrder.quantity }}</span></div>
       </div>
       <!-- 退款按钮 -->
-      <div v-if="[1,2,3].includes(currentOrder.status)" style="padding:0 10px;margin-top:12px;">
+      <div v-if="[1,2].includes(currentOrder.status)" style="padding:0 10px;margin-top:12px;">
         <van-button block round type="danger" size="small" @click="refundOrder(currentOrder)" :loading="submitting">申请退款</van-button>
       </div>
     </div>
@@ -307,14 +307,10 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     <!-- 订单统计 -->
     <div class="profile-stats">
       <div class="stat-item" @click="goToOrders(1)">
-        <div class="stat-num">{{ orderStats.pending }}</div>
-        <div class="stat-label">待接单</div>
+        <div class="stat-num">{{ orderStats.ordered }}</div>
+        <div class="stat-label">已下单</div>
       </div>
       <div class="stat-item" @click="goToOrders(2)">
-        <div class="stat-num">{{ orderStats.accepted }}</div>
-        <div class="stat-label">进行中</div>
-      </div>
-      <div class="stat-item" @click="goToOrders(3)">
         <div class="stat-num">{{ orderStats.completed }}</div>
         <div class="stat-label">已完成</div>
       </div>
@@ -516,14 +512,13 @@ const app = createApp({
     async function markRead(orderId) {
       try { await api(`/chat/read/${orderId}`, { method: 'POST' }); } catch {}
     }
-    const orderFilter = ref(null); // null=全部, -1=咨询, 1=待接单, 2=进行中, 3=已完成
+    const orderFilter = ref(null); // null=全部, -1=咨询, 1=已下单, 2=已完成, 3=已退款
     const orderStats = computed(() => {
-      const s = { consult: 0, pending: 0, accepted: 0, completed: 0 };
+      const s = { consult: 0, ordered: 0, completed: 0 };
       for (const o of orders.value) {
         if (o.status === -1) s.consult++;
-        else if (o.status === 1) s.pending++;
-        else if (o.status === 2) s.accepted++;
-        else if (o.status === 3) s.completed++;
+        else if (o.status === 1) s.ordered++;
+        else if (o.status === 2) s.completed++;
       }
       return s;
     });
@@ -871,9 +866,9 @@ const app = createApp({
     function formatPrice(fen) { return (fen / 100).toFixed(2); }
     function isNearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
 
-    function statusText(s) { return {'-1':'咨询',0:'待支付',1:'待接单',2:'已接单',3:'已完成',4:'退款中',5:'已退款'}[s] ?? '未知'; }
-    function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#787890',4:'#e65c5c',5:'#c0564a'}[s] ?? '#787890'; }
-    function statusClass(s) { return {'-1':'status-consult',0:'status-unpaid',1:'status-pending',2:'status-accepted',3:'status-completed',4:'status-unpaid',5:'status-unpaid'}[s] ?? 'status-unpaid'; }
+    function statusText(s) { return {'-1':'咨询',0:'待付款',1:'已下单',2:'已完成',3:'已退款'}[s] ?? '未知'; }
+    function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#c0564a'}[s] ?? '#787890'; }
+    function statusClass(s) { return {'-1':'status-consult',0:'status-unpaid',1:'status-pending',2:'status-completed',3:'status-unpaid'}[s] ?? 'status-unpaid'; }
     function roleLabel(r) { return { CUSTOMER: '客户', MERCHANT: '商家' }[r] || r; }
     function formatTime(ts) {
       const d = new Date(ts * 1000);

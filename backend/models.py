@@ -15,12 +15,10 @@ class Role(str):
 
 class OrderStatus(IntEnum):
     CONSULTATION = -1   # 咨询（未下单）
-    UNPAID = 0          # 待支付
-    PENDING = 1         # 待接单
-    ACCEPTED = 2        # 已接单
-    COMPLETED = 3       # 已完成
-    REFUNDING = 4       # 退款中
-    REFUNDED = 5        # 已退款
+    UNPAID = 0          # 待付款
+    ORDERED = 1         # 已下单
+    COMPLETED = 2       # 已完成
+    REFUNDED = 3        # 已退款
 
 
 class User(Base):

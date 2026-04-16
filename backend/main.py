@@ -45,7 +45,7 @@ def _order_to_out(order: Order) -> dict:
 from wechat.config import settings
 from wechat.token import get_jssdk_signature
 from wechat.menu import create_menu as wx_create_menu
-from wechat.template import notify_order_accepted, notify_order_completed
+from wechat.template import notify_order_completed
 
 
 # ---- Lifespan ----
@@ -357,7 +357,7 @@ async def pay_create(
 
     # Mock 模式：直接标记为已支付
     if settings.PAY_MOCK:
-        order.status = OrderStatus.PENDING
+        order.status = OrderStatus.ORDERED
         await db.execute(update(Good).where(Good.id == good.id).values(sales=Good.sales + qty))
         await db.commit()
         return {"mock": True, "order_id": order.id, "status": "PAID"}
@@ -415,7 +415,7 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
         return JSONResponse({"code": "FAIL", "message": "订单不存在"}, status_code=404)
 
     if order.status == OrderStatus.UNPAID:
-        order.status = OrderStatus.PENDING
+        order.status = OrderStatus.ORDERED
         order.transaction_id = resource.get("transaction_id", "")
         if order.good:
             await db.execute(
@@ -475,7 +475,7 @@ async def pay_refund(
 ):
     """申请退款"""
     order = await _verify_order_access(order_id, user, db)
-    if order.status not in (OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.COMPLETED):
+    if order.status not in (OrderStatus.ORDERED, OrderStatus.COMPLETED):
         raise HTTPException(400, "订单状态不支持退款")
 
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
@@ -505,7 +505,7 @@ async def pay_refund(
             reason=reason,
             transaction_id=order.transaction_id,
         )
-        order.status = OrderStatus.REFUNDING
+        order.status = OrderStatus.REFUNDED
         order.refund_id = resp.get("refund_id", "")
         await db.commit()
         return {"mock": False, "status": resp.get("status", "PROCESSING"), "refund_id": resp.get("refund_id")}
@@ -533,7 +533,7 @@ async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
             select(Order).where(Order.id == order_id).options(selectinload(Order.good))
         )
         order = result.scalar_one_or_none()
-        if order and order.status == OrderStatus.REFUNDING:
+        if order and order.status != OrderStatus.REFUNDED:
             order.status = OrderStatus.REFUNDED
             order.refund_id = resource.get("refund_id", order.refund_id)
             if order.good:
@@ -567,7 +567,7 @@ async def pending_orders(
 ):
     result = await db.execute(
         select(Order).options(selectinload(Order.good))
-        .where(Order.status == OrderStatus.PENDING).order_by(Order.create_time.desc())
+        .where(Order.status == OrderStatus.ORDERED).order_by(Order.create_time.desc())
     )
     return [_order_to_out(o) for o in result.scalars().all()]
 
@@ -714,37 +714,6 @@ async def active_orders(
     return orders
 
 
-@app.post("/orders/{order_id}/accept")
-async def accept_order(
-    order_id: str,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT)),
-):
-    result = await db.execute(
-        select(Order).where(Order.id == order_id).options(selectinload(Order.customer))
-        .with_for_update()
-    )
-    order = result.scalar_one_or_none()
-    if not order:
-        raise HTTPException(404, "订单不存在")
-    if order.status != OrderStatus.PENDING:
-        raise HTTPException(400, "订单状态不允许接单")
-    order.status = OrderStatus.ACCEPTED
-    await db.commit()
-
-    # 推送模板消息通知客户
-    try:
-        await notify_order_accepted(
-            openid=order.customer.openid,
-            order_id=order.id,
-            appointment_time=order.appointment_time,
-        )
-    except Exception as e:
-        print(f"[WARN] 模板消息推送失败: {e}")
-
-    return {"msg": "接单成功"}
-
-
 @app.post("/orders/{order_id}/complete")
 async def complete_order(
     order_id: str,
@@ -758,7 +727,7 @@ async def complete_order(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(404, "订单不存在")
-    if order.status != OrderStatus.ACCEPTED:
+    if order.status != OrderStatus.ORDERED:
         raise HTTPException(400, "订单状态不允许完成")
     order.status = OrderStatus.COMPLETED
     await db.commit()
@@ -801,9 +770,8 @@ async def stats_dashboard(
     month_start = _day_start_ts(datetime.date(now.year, now.month, 1))
 
     # 有效订单状态（排除咨询和未支付）
-    valid_status = [OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.COMPLETED,
-                    OrderStatus.REFUNDING, OrderStatus.REFUNDED]
-    paid_status = [OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.COMPLETED]
+    valid_status = [OrderStatus.ORDERED, OrderStatus.COMPLETED, OrderStatus.REFUNDED]
+    paid_status = [OrderStatus.ORDERED, OrderStatus.COMPLETED]
 
     async def _period_stats(start_ts):
         base = select(
@@ -826,7 +794,7 @@ async def stats_dashboard(
         .where(Order.create_time >= month_start)
         .group_by(Order.status)
     )
-    status_names = {1: "pending", 2: "accepted", 3: "completed", 4: "refunding", 5: "refunded"}
+    status_names = {1: "ordered", 2: "completed", 3: "refunded"}
     status_dist = {}
     for status_val, cnt in status_result.all():
         key = status_names.get(status_val, str(status_val))

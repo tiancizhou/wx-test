@@ -145,9 +145,8 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       </div>
       <!-- 操作按钮 -->
       <div style="padding:0 10px;display:flex;gap:8px;">
-        <van-button v-if="detailOrder.status===1" size="small" type="primary" @click="acceptOrder(detailOrder.id)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">接单</van-button>
-        <van-button v-if="detailOrder.status===2" size="small" type="success" @click="completeOrder(detailOrder.id)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">完成</van-button>
-        <van-button v-if="[1,2,3].includes(detailOrder.status)" size="small" type="danger" plain @click="refundOrderAction(detailOrder)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">退款</van-button>
+        <van-button v-if="detailOrder.status===1" size="small" type="success" @click="completeOrder(detailOrder.id)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">完成</van-button>
+        <van-button v-if="[1,2].includes(detailOrder.status)" size="small" type="danger" plain @click="refundOrderAction(detailOrder)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">退款</van-button>
         <van-button size="small" plain @click="goToChat(detailOrder)" style="flex:1;color:var(--gold);border-color:var(--gold);">进入会话</van-button>
       </div>
     </div>
@@ -157,11 +156,9 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       <div class="filter-bar">
         <div :class="['filter-tag', orderFilter === null ? 'active' : '']" @click="orderFilter = null">全部</div>
         <div :class="['filter-tag', orderFilter === -1 ? 'active' : '']" @click="orderFilter = orderFilter === -1 ? null : -1">咨询</div>
-        <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">待接单</div>
-        <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">进行中</div>
-        <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已完成</div>
-        <div :class="['filter-tag', orderFilter === 4 ? 'active' : '']" @click="orderFilter = orderFilter === 4 ? null : 4">退款中</div>
-        <div :class="['filter-tag', orderFilter === 5 ? 'active' : '']" @click="orderFilter = orderFilter === 5 ? null : 5">已退款</div>
+        <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">已下单</div>
+        <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">已完成</div>
+        <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">已退款</div>
       </div>
       <div v-if="!filteredOrders.length" style="text-align:center;padding:60px 0;color:var(--text-secondary);font-size:13px;">暂无订单</div>
       <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
@@ -176,8 +173,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">预约: {{ o.appointment_time }}</div>
         <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ formatPrice(o.total_fee) }}<span v-if="o.quantity > 1" style="font-size:12px;color:var(--text-secondary);margin-left:4px;">x{{ o.quantity }}</span></div>
         <div v-if="o.status !== -1" style="margin-top:10px;display:flex;gap:8px;" @click.stop>
-          <van-button v-if="o.status===1" size="small" type="primary" @click="acceptOrder(o.id)" :loading="actionLoading" :disabled="actionLoading">接单</van-button>
-          <van-button v-if="o.status===2" size="small" type="success" @click="completeOrder(o.id)" :loading="actionLoading" :disabled="actionLoading">完成</van-button>
+          <van-button v-if="o.status===1" size="small" type="success" @click="completeOrder(o.id)" :loading="actionLoading" :disabled="actionLoading">完成</van-button>
         </div>
       </div>
     </div>
@@ -218,8 +214,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         </div>
         <div class="order-detail-row"><span class="order-detail-label">客户电话</span><span class="order-detail-value">{{ currentOrder.phone }}</span></div>
         <div v-if="currentOrder.status === 1 || currentOrder.status === 2" style="margin-top:10px;display:flex;gap:8px;">
-          <van-button v-if="currentOrder.status===1" size="small" type="primary" @click="acceptOrder(currentOrder.id)">接单</van-button>
-          <van-button v-if="currentOrder.status===2" size="small" type="success" @click="completeOrder(currentOrder.id)">完成</van-button>
+          <van-button v-if="currentOrder.status===1" size="small" type="success" @click="completeOrder(currentOrder.id)">完成</van-button>
         </div>
       </div>
       <div class="chat-messages" ref="chatBox">
@@ -513,10 +508,8 @@ const app = createApp({
       const dist = stats.value.status_dist;
       const total = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
       const items = [
-        { key: 'pending', label: '待接单', color: '#d4a03c' },
-        { key: 'accepted', label: '进行中', color: '#07c160' },
-        { key: 'completed', label: '已完成', color: '#5b8dd9' },
-        { key: 'refunding', label: '退款中', color: '#e65c5c' },
+        { key: 'ordered', label: '已下单', color: '#d4a03c' },
+        { key: 'completed', label: '已完成', color: '#07c160' },
         { key: 'refunded', label: '已退款', color: '#c0564a' },
       ];
       return items.filter(it => dist[it.key]).map(it => ({
@@ -602,11 +595,6 @@ const app = createApp({
     function goToChat(order) { detailOrder.value = null; currentOrder.value = order; activeTab.value = 1; loadChat(order.id); }
     function openChat(order) { currentOrder.value = order; activeTab.value = 1; loadChat(order.id); }
     function closeChat() { currentOrder.value = null; messages.value = []; }
-    async function acceptOrder(id) {
-      actionLoading.value = true;
-      try { await api(`/orders/${id}/accept`, { method: 'POST' }); vant.showToast('已接单'); loadOrders(); detailOrder.value = null; }
-      finally { actionLoading.value = false; }
-    }
     async function completeOrder(id) {
       actionLoading.value = true;
       try { await api(`/orders/${id}/complete`, { method: 'POST' }); vant.showToast('已完成'); loadOrders(); detailOrder.value = null; }
@@ -707,8 +695,8 @@ const app = createApp({
     function formatPrice(fen) { return (fen / 100).toFixed(2); }
     function isNearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
 
-    function statusText(s) { return {'-1':'咨询',0:'待支付',1:'待接单',2:'已接单',3:'已完成',4:'退款中',5:'已退款'}[s] ?? '未知'; }
-    function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#5b8dd9',4:'#e65c5c',5:'#c0564a'}[s] ?? '#787890'; }
+    function statusText(s) { return {'-1':'咨询',0:'待付款',1:'已下单',2:'已完成',3:'已退款'}[s] ?? '未知'; }
+    function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#c0564a'}[s] ?? '#787890'; }
     function roleLabel(r) { return { CUSTOMER:'客户', MERCHANT:'商家' }[r] || r; }
     function convTitle(o) {
       if (!o) return '';
@@ -767,7 +755,7 @@ const app = createApp({
     return {
       ready, loginError, activeTab, orders, filteredOrders, orderFilter, conversations, goods, detailOrder, currentOrder, messages, msgInput, chatBox, stats, statusDistList, actionLoading,
       showGoodForm, isEditGood, savingGood, goodForm,
-      openOrderDetail, closeOrderDetail, goToChat, openChat, closeChat, acceptOrder, completeOrder, refundOrderAction, sendMessage,
+      openOrderDetail, closeOrderDetail, goToChat, openChat, closeChat, completeOrder, refundOrderAction, sendMessage,
       openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,
       uploadCover, uploadDetail, removeDetailImg,
       unreadCount, statusText, statusColor, roleLabel, convTitle, formatTime, formatPrice, retryLogin
