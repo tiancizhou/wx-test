@@ -205,23 +205,17 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     </div>
   </div>
 
-  <!-- 消息Tab：统一商家聊天 -->
-  <div v-show="activeTab === 2" class="chat-wrap">
-    <div class="detail-header">
-      <span style="font-weight:600;color:#ffffff;font-size:16px;">商家客服</span>
-    </div>
-    <div class="chat-messages" ref="allChatBox">
-      <div v-if="!allMessages.length" style="text-align:center;padding:40px 0;color:#787890;font-size:13px;">暂无消息，发消息开始咨询吧</div>
-      <div v-for="m in allMessages" :key="m.id"
-           :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left']"
-           style="display:flex;flex-direction:column;">
-        <div class="bubble-role">{{ roleLabel(m.sender_role) }} · {{ formatTime(m.create_time) }}</div>
-        <div>{{ m.content }}</div>
+  <!-- 消息Tab：订单会话列表 -->
+  <div v-show="activeTab === 2" style="padding-bottom:60px;">
+    <div v-if="!conversations.length" style="text-align:center;padding:60px 0;color:#787890;font-size:13px;">暂无消息</div>
+    <div v-for="c in conversations" :key="c.order_id" class="order-card" @click="openConversation(c)">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:600;color:#ffffff;">{{ c.good_title }}</span>
+        <span style="font-size:11px;color:#787890;">{{ formatTime(c.last_time) }}</span>
       </div>
-    </div>
-    <div class="chat-input-bar">
-      <input v-model="allMsgInput" placeholder="输入消息..." @keyup.enter="sendAllChat">
-      <button @click="sendAllChat">发送</button>
+      <div style="font-size:13px;color:#b0b0c0;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+        {{ c.last_content }}
+      </div>
     </div>
   </div>
 
@@ -370,9 +364,7 @@ const app = createApp({
     const detailGood = ref(null);
     const detailImages = ref([]);
     const submitting = ref(false);
-    const allMessages = ref([]);
-    const allMsgInput = ref('');
-    const allChatBox = ref(null);
+    const conversations = ref([]);
 
     const timeSlots = ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00','19:00-20:00','20:00-21:00'];
     const dateOptions = ref([]);
@@ -423,7 +415,7 @@ const app = createApp({
           if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
         }
       } else if (activeTab.value === 2) {
-        await pollAllChat();
+        await loadConversations();
       }
     }
 
@@ -519,46 +511,20 @@ const app = createApp({
       } catch (e) { vant.showToast('发送失败'); }
     }
 
-    async function loadAllChat() {
-      try {
-        const msgs = await api('/chat/all?after_id=0');
-        if (msgs.length > 0 || allMessages.value.length === 0) {
-          allMessages.value = msgs;
-        }
-        await nextTick();
-        if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
-      } catch (e) {
-        console.error('loadAllChat error:', e);
+    async function loadConversations() {
+      try { conversations.value = await api('/chat/conversations'); } catch {}
+    }
+    function openConversation(conv) {
+      const order = orders.value.find(o => o.id === conv.order_id);
+      if (order) {
+        currentOrder.value = order;
+        activeTab.value = 1;
       }
     }
-    async function pollAllChat() {
-      const lastId = allMessages.value.length ? allMessages.value[allMessages.value.length - 1].id : 0;
-      const newMsgs = await api('/chat/all?after_id=' + lastId);
-      if (newMsgs.length) {
-        allMessages.value.push(...newMsgs);
-        await nextTick();
-        if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
-      }
-    }
-    // 切换到消息Tab时自动加载聊天记录
+    // 切换到消息Tab时自动加载会话列表
     watch(activeTab, (tab) => {
-      if (tab === 2) loadAllChat();
+      if (tab === 2) loadConversations();
     });
-    async function sendAllChat() {
-      if (!allMsgInput.value.trim()) return;
-      if (!orders.value.length) { vant.showToast('请先下单后再咨询'); return; }
-      const latestOrder = orders.value[0];
-      try {
-        const sent = await api('/chat', {
-          method: 'POST',
-          body: JSON.stringify({ order_id: latestOrder.id, content: allMsgInput.value })
-        });
-        allMsgInput.value = '';
-        allMessages.value.push(sent);
-        await nextTick();
-        if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
-      } catch (e) { vant.showToast('发送失败'); }
-    }
 
     function statusText(s) { return ['待支付','待接单','已接单','已完成'][s] || '未知'; }
     function statusColor(s) { return ['#999','#ff9800','#07c160','#999'][s] || '#999'; }
@@ -587,7 +553,6 @@ const app = createApp({
         // WKWebView keyboard: scroll chat to bottom when window resizes (keyboard up/down)
         window.addEventListener('resize', () => {
           if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
-          if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
         });
       } catch (e) {
         console.error('登录失败:', e);
@@ -600,9 +565,9 @@ const app = createApp({
       ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
       chatBox, showBook, bookGood, bookForm, submitting,
       showDetail, detailGood, detailImages, timeSlots, dateOptions,
-      allMessages, allMsgInput, allChatBox,
+      conversations,
       openBook, submitOrder, openOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
-      sendAllChat,
+      openConversation,
       statusText, statusColor, roleLabel, formatTime
     };
   }

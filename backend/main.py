@@ -495,28 +495,36 @@ async def send_chat(
     return log
 
 
-@app.get("/chat/all", response_model=list[ChatLogOut])
-async def get_all_chat(
-    after_id: int = 0,
+
+@app.get("/chat/conversations")
+async def get_conversations(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """客户：获取所有订单的合并聊天记录"""
+    """客户：获取订单会话列表（按最后消息时间倒序）"""
     order_result = await db.execute(
-        select(Order.id).where(Order.customer_id == user.id)
+        select(Order).options(selectinload(Order.good))
+        .where(Order.customer_id == user.id)
     )
-    order_ids = [row[0] for row in order_result.fetchall()]
-    print(f"[chat/all] user={user.id}, order_ids={order_ids}, after_id={after_id}")
-    if not order_ids:
-        return []
-    result = await db.execute(
-        select(ChatLog)
-        .where(ChatLog.order_id.in_(order_ids), ChatLog.id > after_id)
-        .order_by(ChatLog.create_time)
-    )
-    rows = result.scalars().all()
-    print(f"[chat/all] found {len(rows)} messages")
-    return rows
+    conversations = []
+    for order in order_result.scalars().all():
+        last_msg = await db.execute(
+            select(ChatLog)
+            .where(ChatLog.order_id == order.id)
+            .order_by(ChatLog.id.desc()).limit(1)
+        )
+        msg = last_msg.scalar_one_or_none()
+        if msg:
+            conversations.append({
+                "order_id": order.id,
+                "good_title": order.good.title if order.good else "商品",
+                "good_img_url": order.good.img_url if order.good else "",
+                "last_content": msg.content[:50],
+                "last_time": msg.create_time,
+                "status": order.status,
+            })
+    conversations.sort(key=lambda x: x["last_time"], reverse=True)
+    return conversations
 
 
 # ============================================================
