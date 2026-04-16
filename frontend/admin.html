@@ -127,6 +127,11 @@ const app = createApp({
 
     async function api(path, opts = {}) {
       const res = await fetch(path, { headers: headers(), ...opts });
+      if (res.status === 401) {
+        localStorage.removeItem('admin_key');
+        loggedIn.value = false;
+        throw new Error('登录已过期，请重新登录');
+      }
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text);
@@ -230,13 +235,22 @@ const app = createApp({
       return { CUSTOMER: '客户', MERCHANT: '商家', SERVICE: '客服', ADMIN: '管理员' }[r] || r;
     }
 
-    onMounted(() => {
+    onMounted(async () => {
       const key = localStorage.getItem('admin_key');
       if (key) {
-        password.value = key;
-        loggedIn.value = true;
-        loadUsers();
-        loadContact();
+        try {
+          const res = await fetch('/admin/users', { headers: { 'X-Admin-Key': key } });
+          if (res.ok) {
+            password.value = key;
+            loggedIn.value = true;
+            loadUsers();
+            loadContact();
+          } else {
+            localStorage.removeItem('admin_key');
+          }
+        } catch {
+          localStorage.removeItem('admin_key');
+        }
       }
     });
 
