@@ -11,7 +11,6 @@ from database import Base
 class Role(str):
     CUSTOMER = "CUSTOMER"
     MERCHANT = "MERCHANT"
-    ADMIN = "ADMIN"
 
 
 class OrderStatus(IntEnum):

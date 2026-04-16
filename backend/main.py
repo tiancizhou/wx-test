@@ -171,7 +171,7 @@ async def get_good(good_id: int, db: AsyncSession = Depends(get_db)):
 @app.get("/goods/all", response_model=list[GoodOut])
 async def list_all_goods(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
     """商家/管理员：获取全部商品（含已下架）"""
     result = await db.execute(select(Good).order_by(Good.id))
@@ -182,7 +182,7 @@ async def list_all_goods(
 async def create_good(
     data: GoodCreate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
     """创建商品"""
     good = Good(**data.model_dump())
@@ -197,7 +197,7 @@ async def update_good(
     good_id: int,
     data: GoodUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
     result = await db.execute(select(Good).where(Good.id == good_id))
     good = result.scalar_one_or_none()
@@ -214,7 +214,7 @@ async def update_good(
 async def delete_good(
     good_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
     """删除商品"""
     result = await db.execute(select(Good).where(Good.id == good_id))
@@ -237,7 +237,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 @app.post("/upload")
 async def upload_image(
     file: UploadFile = File(...),
-    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
     """上传图片，返回可访问的 URL"""
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -380,7 +380,7 @@ async def my_orders(
 @app.get("/orders/pending", response_model=list[OrderOut])
 async def pending_orders(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
     result = await db.execute(
         select(Order).options(selectinload(Order.good))
@@ -430,7 +430,7 @@ async def create_consult(
 @app.get("/orders/active")
 async def active_orders(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
     result = await db.execute(
         select(Order).options(selectinload(Order.good))
@@ -472,7 +472,7 @@ async def active_orders(
 async def accept_order(
     order_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
@@ -501,7 +501,7 @@ async def accept_order(
 async def complete_order(
     order_id: str,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
     result = await db.execute(select(Order).where(Order.id == order_id))
     order = result.scalar_one_or_none()
@@ -811,9 +811,9 @@ async def jssdk_config(url: str):
 @app.post("/wechat/menu")
 async def setup_menu(
     base_url: str,
-    user: User = Depends(require_role(Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT)),
 ):
-    """管理员创建自定义菜单"""
+    """商家创建自定义菜单"""
     result = await wx_create_menu(base_url)
     if result.get("errcode", 0) != 0:
         raise HTTPException(400, f"菜单创建失败: {result}")

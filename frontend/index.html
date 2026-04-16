@@ -87,7 +87,6 @@ const app = createApp({
       const rolePages = {
         CUSTOMER: '/customer',
         MERCHANT: '/merchant',
-        ADMIN: '/merchant',
       };
       const page = rolePages[user.role] || '/customer';
       location.replace(page);
