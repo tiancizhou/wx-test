@@ -895,6 +895,7 @@ async def get_conversations(
             )
             conversations.append({
                 "order_id": order.id,
+                "create_time": order.create_time,
                 "good_title": order.good.title if order.good else "商品",
                 "good_img_url": order.good.img_url if order.good else "",
                 "last_content": msg.content[:50],

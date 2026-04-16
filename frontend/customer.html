@@ -264,6 +264,9 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
           </div>
           <span class="meta-time time-right">{{ formatTime(c.last_time) }}</span>
         </div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+          订单号 {{ c.order_id.slice(-8) }} · {{ formatTime(c.create_time) }}
+        </div>
         <div class="single-line-preview">
           {{ c.last_content }}
         </div>
