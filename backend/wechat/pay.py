@@ -266,6 +266,37 @@ async def query_order(out_trade_no: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# V3 关闭订单
+# ---------------------------------------------------------------------------
+
+async def close_order(out_trade_no: str):
+    """
+    关闭订单（用户取消支付后调用，阻止后续支付）
+    POST /v3/pay/transactions/out-trade-no/{out_trade_no}/close
+    Body: {"mchid": "..."}
+    """
+    url_path = f"/v3/pay/transactions/out-trade-no/{quote(out_trade_no, safe='')}/close"
+    url = f"https://api.mch.weixin.qq.com{url_path}"
+
+    body_obj = {"mchid": settings.MCH_ID}
+    body_str = json.dumps(body_obj, separators=(",", ":"))
+
+    auth_header = _make_v3_auth_header("POST", url_path, body_str)
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": auth_header,
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, content=body_str, headers=headers, timeout=10)
+
+    if resp.status_code not in (200, 204):
+        raise Exception(f"关闭订单失败 (HTTP {resp.status_code}): {resp.text}")
+
+
+# ---------------------------------------------------------------------------
 # V3 申请退款
 # ---------------------------------------------------------------------------
 

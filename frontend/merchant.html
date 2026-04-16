@@ -66,6 +66,21 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
 .upload-add { width: 60px; height: 60px; border: 1px dashed var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--text-secondary); cursor: pointer; }
 .upload-remove { position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; background: #e74c3c; color: #fff; border-radius: 50%; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .img-thumb-wrap { position: relative; display: inline-block; }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 10px; }
+.stat-card { background: var(--bg-card); border-radius: 10px; padding: 14px; border: 1px solid var(--border); }
+.stat-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 700; color: var(--gold); }
+.stat-value.small { font-size: 18px; }
+.stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+.stat-bar-wrap { margin-top: 6px; }
+.stat-bar-bg { height: 8px; border-radius: 4px; background: var(--bg-input); overflow: hidden; }
+.stat-bar-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+.stat-rank-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.stat-rank-item:last-child { border-bottom: none; }
+.stat-rank-num { width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.stat-rank-num.top { background: var(--gold); color: var(--bg-primary); }
+.stat-rank-num.normal { background: var(--bg-input); color: var(--text-secondary); }
+.stat-section-title { font-size: 14px; font-weight: 600; color: var(--text-title); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
 .van-tabbar { background: var(--bg-card) !important; border-top: 1px solid var(--border) !important; padding-bottom: env(safe-area-inset-bottom) !important; }
 .van-tabbar-item--active { color: var(--gold) !important; }
 .van-tabbar-item { color: var(--text-secondary) !important; background: transparent !important; }
@@ -90,6 +105,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
     <van-tabbar-item icon="orders-o" :dot="!!unreadCount">订单</van-tabbar-item>
     <van-tabbar-item icon="chat-o">沟通</van-tabbar-item>
     <van-tabbar-item icon="shop-o">商品</van-tabbar-item>
+    <van-tabbar-item icon="chart-todo-o">统计</van-tabbar-item>
   </van-tabbar>
 
   <!-- 订单列表 -->
@@ -254,6 +270,77 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
     </div>
   </div>
 
+  <!-- 统计 -->
+  <div v-show="activeTab === 3" style="padding-bottom:60px;">
+    <div style="padding:12px 16px;font-weight:600;font-size:16px;color:var(--text-title);">经营数据</div>
+    <template v-if="stats">
+      <!-- 今日数据 -->
+      <div style="padding:0 16px 4px;font-size:13px;color:var(--text-secondary);">今日</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">营收</div>
+          <div class="stat-value">¥{{ (stats.today.revenue/100).toFixed(0) }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">订单数</div>
+          <div class="stat-value">{{ stats.today.order_count }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">客户数</div>
+          <div class="stat-value">{{ stats.today.customers }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">客单价</div>
+          <div class="stat-value">¥{{ (stats.today.avg_fee/100).toFixed(0) }}</div>
+        </div>
+      </div>
+
+      <!-- 本月数据 -->
+      <div style="padding:16px 16px 4px;font-size:13px;color:var(--text-secondary);">本月</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">营收</div>
+          <div class="stat-value.small">¥{{ (stats.month.revenue/100).toFixed(0) }}</div>
+          <div class="stat-sub">{{ stats.month.order_count }} 笔订单</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">客户数</div>
+          <div class="stat-value.small">{{ stats.month.customers }}</div>
+          <div class="stat-sub">客单价 ¥{{ (stats.month.avg_fee/100).toFixed(0) }}</div>
+        </div>
+      </div>
+
+      <!-- 订单状态分布 -->
+      <div style="padding:16px 16px 0;">
+        <div class="stat-section-title">订单状态分布（本月）</div>
+        <div v-for="(item, idx) in statusDistList" :key="idx" style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+            <span style="color:var(--text-body);">{{ item.label }}</span>
+            <span style="color:var(--text-title);font-weight:500;">{{ item.count }}</span>
+          </div>
+          <div class="stat-bar-bg">
+            <div class="stat-bar-fill" :style="{width: item.pct + '%', background: item.color}"></div>
+          </div>
+        </div>
+        <div v-if="!statusDistList.length" style="text-align:center;padding:20px 0;color:var(--text-secondary);font-size:13px;">暂无数据</div>
+      </div>
+
+      <!-- 商品销量排行 -->
+      <div style="padding:16px 16px 0;">
+        <div class="stat-section-title">商品销量排行（本月）</div>
+        <div v-if="!stats.top_goods.length" style="text-align:center;padding:20px 0;color:var(--text-secondary);font-size:13px;">暂无数据</div>
+        <div v-for="(g, idx) in stats.top_goods" :key="idx" class="stat-rank-item">
+          <span :class="['stat-rank-num', idx < 3 ? 'top' : 'normal']">{{ idx + 1 }}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;color:var(--text-title);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ g.title }}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">销量 {{ g.sales }} · ¥{{ (g.revenue/100).toFixed(0) }}</div>
+          </div>
+        </div>
+      </div>
+    </template>
+    <div v-else style="text-align:center;padding:60px 0;color:var(--text-secondary);">加载中...</div>
+  </div>
+
   <!-- 创建/编辑商品弹窗 -->
   <van-popup v-model:show="showGoodForm" position="bottom" round :style="{ minHeight: '80%' }">
     <div class="form-popup" style="max-height:90vh;overflow-y:auto;">
@@ -385,6 +472,7 @@ const app = createApp({
     const messages = ref([]);
     const msgInput = ref('');
     const chatBox = ref(null);
+    const stats = ref(null);
     let pollTimer = null;
 
     // ---- 未读追踪 ----
@@ -395,6 +483,21 @@ const app = createApp({
     });
     const conversations = computed(() => orders.value.filter(o => o.last_msg_id > 0));
     const unreadCount = computed(() => orders.value.reduce((sum, o) => sum + (o.unread_count || 0), 0));
+    const statusDistList = computed(() => {
+      if (!stats.value) return [];
+      const dist = stats.value.status_dist;
+      const total = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
+      const items = [
+        { key: 'pending', label: '待接单', color: '#d4a03c' },
+        { key: 'accepted', label: '进行中', color: '#07c160' },
+        { key: 'completed', label: '已完成', color: '#5b8dd9' },
+        { key: 'refunding', label: '退款中', color: '#e65c5c' },
+        { key: 'refunded', label: '已退款', color: '#c0564a' },
+      ];
+      return items.filter(it => dist[it.key]).map(it => ({
+        ...it, count: dist[it.key], pct: Math.round(dist[it.key] / total * 100)
+      }));
+    });
     async function markRead(orderId) {
       try { await api(`/chat/read/${orderId}`, { method: 'POST' }); } catch {}
     }
@@ -447,6 +550,9 @@ const app = createApp({
     }
     async function loadGoods() {
       try { goods.value = await api('/goods/all'); } catch (e) { console.error('loadGoods:', e); }
+    }
+    async function loadStats() {
+      try { stats.value = await api('/stats/dashboard'); } catch (e) { console.error('loadStats:', e); }
     }
     async function loadChat(orderId) {
       messages.value = await api(`/chat/${orderId}?after_id=0`);
@@ -588,7 +694,7 @@ const app = createApp({
         await wxLogin();
         ready.value = true;
         wxJSSDKInit();
-        loadOrders(); loadGoods();
+        loadOrders(); loadGoods(); loadStats();
         pollTimer = setInterval(() => { loadOrders(); pollChat(); }, 5000);
       } catch (e) { console.error('登录失败:', e); }
     });
@@ -603,7 +709,7 @@ const app = createApp({
     });
 
     return {
-      ready, activeTab, orders, filteredOrders, orderFilter, conversations, goods, detailOrder, currentOrder, messages, msgInput, chatBox,
+      ready, activeTab, orders, filteredOrders, orderFilter, conversations, goods, detailOrder, currentOrder, messages, msgInput, chatBox, stats, statusDistList,
       showGoodForm, isEditGood, savingGood, goodForm,
       openOrderDetail, closeOrderDetail, goToChat, openChat, closeChat, acceptOrder, completeOrder, refundOrderAction, sendMessage,
       openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,

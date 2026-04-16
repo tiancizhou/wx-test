@@ -635,6 +635,7 @@ const app = createApp({
     async function submitOrder() {
       if (submitting.value) return;
       submitting.value = true;
+      let unpaidOrderId = null;
       try {
         const res = await api('/pay/create', {
           method: 'POST',
@@ -658,6 +659,7 @@ const app = createApp({
 
         // 真实支付：调 WeixinJSBridge 公众号支付（V3 signType=RSA）
         const payParams = res.pay_params;
+        unpaidOrderId = res.order_id;
         await new Promise((resolve, reject) => {
           function onBridgeReady() {
             WeixinJSBridge.invoke(
@@ -694,6 +696,10 @@ const app = createApp({
         const msg = e.message || e.errMsg || e;
         if (msg.includes('cancel') || msg.includes('get_brand_wcpay_request:cancel')) {
           vant.showToast('已取消支付');
+          // 关闭未支付订单，清理数据库
+          if (unpaidOrderId) {
+            try { await api(`/pay/close/${unpaidOrderId}`, { method: 'POST' }); } catch {}
+          }
         } else {
           vant.showToast('下单失败: ' + msg);
         }

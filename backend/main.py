@@ -2,6 +2,7 @@ import time
 import hashlib
 import json
 import uuid
+import asyncio
 import xml.etree.cElementTree as ET
 from contextlib import asynccontextmanager
 
@@ -48,10 +49,46 @@ from wechat.template import notify_order_accepted, notify_order_completed
 
 
 # ---- Lifespan ----
+
+STALE_ORDER_CLEANUP_INTERVAL = 600  # 每 10 分钟清理一次
+STALE_ORDER_MAX_AGE = 1800  # 超过 30 分钟未支付视为过期
+
+
+async def _cleanup_stale_unpaid_orders():
+    """后台任务：定期清理过期未支付订单"""
+    while True:
+        await asyncio.sleep(STALE_ORDER_CLEANUP_INTERVAL)
+        try:
+            from database import async_session
+            cutoff = int(time.time()) - STALE_ORDER_MAX_AGE
+            async with async_session() as db:
+                result = await db.execute(
+                    select(Order).where(
+                        Order.status == OrderStatus.UNPAID,
+                        Order.create_time < cutoff,
+                    )
+                )
+                stale_orders = result.scalars().all()
+                for order in stale_orders:
+                    if not settings.PAY_MOCK:
+                        try:
+                            await close_order(order.id)
+                        except Exception:
+                            pass
+                    await db.delete(order)
+                if stale_orders:
+                    await db.commit()
+                    print(f"[CLEANUP] 清理 {len(stale_orders)} 个过期未支付订单")
+        except Exception as e:
+            print(f"[CLEANUP] 清理失败: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    task = asyncio.create_task(_cleanup_stale_unpaid_orders())
     yield
+    task.cancel()
 
 app = FastAPI(title="到家按摩预约系统", lifespan=lifespan)
 
@@ -260,7 +297,7 @@ async def upload_image(
 # 支付
 # ============================================================
 
-from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify, query_order, create_refund, decrypt_refund_notify
+from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify, query_order, create_refund, decrypt_refund_notify, close_order
 
 
 @app.post("/pay/create")
@@ -379,6 +416,31 @@ async def pay_query(order_id: str, db: AsyncSession = Depends(get_db)):
         return {"mock": False, **result}
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@app.post("/pay/close/{order_id}")
+async def pay_close(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """关闭未支付订单：调微信关单 API 并删除 UNPAID 订单"""
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "订单不存在")
+    if order.status != OrderStatus.UNPAID:
+        raise HTTPException(400, "订单状态不允许关闭")
+
+    if not settings.PAY_MOCK:
+        try:
+            await close_order(order_id)
+        except Exception as e:
+            print(f"[WARN] 微信关单失败 (订单可能已过期): {e}")
+
+    await db.delete(order)
+    await db.commit()
+    return {"msg": "已关闭"}
 
 
 @app.post("/pay/refund/{order_id}")
@@ -646,6 +708,85 @@ async def complete_order(
         print(f"[WARN] 模板消息推送失败: {e}")
 
     return {"msg": "订单已完成"}
+
+
+# ============================================================
+# 统计
+# ============================================================
+
+import datetime
+from sqlalchemy import distinct
+
+
+def _day_start_ts(dt=None):
+    """获取某天 0 点的 unix 时间戳"""
+    if dt is None:
+        dt = datetime.date.today()
+    return int(datetime.datetime.combine(dt, datetime.time.min).timestamp())
+
+
+@app.get("/stats/dashboard")
+async def stats_dashboard(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    """商家端统计数据：今日/本月营收、订单数、客户数、状态分布、商品排行"""
+    today_start = _day_start_ts()
+    now = datetime.date.today()
+    month_start = _day_start_ts(datetime.date(now.year, now.month, 1))
+
+    # 有效订单状态（排除咨询和未支付）
+    valid_status = [OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.COMPLETED,
+                    OrderStatus.REFUNDING, OrderStatus.REFUNDED]
+    paid_status = [OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.COMPLETED]
+
+    async def _period_stats(start_ts):
+        base = select(
+            func.count(Order.id),
+            func.coalesce(func.sum(Order.total_fee), 0),
+            func.count(distinct(Order.customer_id)),
+        ).where(Order.status.in_(valid_status), Order.create_time >= start_ts)
+        result = await db.execute(base)
+        row = result.one()
+        count, revenue, customers = row
+        avg = revenue // count if count > 0 else 0
+        return {"order_count": count, "revenue": revenue, "customers": customers, "avg_fee": avg}
+
+    today = await _period_stats(today_start)
+    month = await _period_stats(month_start)
+
+    # 状态分布（本月）
+    status_result = await db.execute(
+        select(Order.status, func.count(Order.id))
+        .where(Order.create_time >= month_start)
+        .group_by(Order.status)
+    )
+    status_names = {1: "pending", 2: "accepted", 3: "completed", 4: "refunding", 5: "refunded"}
+    status_dist = {}
+    for status_val, cnt in status_result.all():
+        key = status_names.get(status_val, str(status_val))
+        if key:
+            status_dist[key] = cnt
+
+    # 商品销量排行（本月，按销售额降序）
+    goods_result = await db.execute(
+        select(
+            Good.title,
+            func.coalesce(func.sum(Order.quantity), 0),
+            func.coalesce(func.sum(Order.total_fee), 0),
+        )
+        .join(Order, Order.good_id == Good.id)
+        .where(Order.status.in_(valid_status), Order.create_time >= month_start)
+        .group_by(Good.id)
+        .order_by(func.sum(Order.total_fee).desc())
+        .limit(10)
+    )
+    top_goods = [
+        {"title": title, "sales": int(sales), "revenue": int(rev)}
+        for title, sales, rev in goods_result.all()
+    ]
+
+    return {"today": today, "month": month, "status_dist": status_dist, "top_goods": top_goods}
 
 
 # ============================================================
