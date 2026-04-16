@@ -152,7 +152,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
   <!-- 订单Tab：列表 / 详情切换 -->
   <div v-show="activeTab === 1">
     <!-- 订单列表视图 -->
-    <div v-if="!currentOrder" style="padding-bottom:60px;">
+    <div v-show="!currentOrder" style="padding-bottom:60px;">
       <div v-if="!orders.length" style="text-align:center;padding:60px 0;color:#787890;">暂无订单</div>
       <div v-for="o in orders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -166,14 +166,14 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       </div>
     </div>
     <!-- 订单详情视图 -->
-    <div v-else class="chat-wrap">
+    <div v-show="currentOrder" class="chat-wrap">
       <div class="detail-header">
-        <span class="back-arrow" @click="currentOrder=null">‹</span>
+        <span class="back-arrow" @click="closeOrderDetail">‹</span>
         <span style="font-weight:600;color:#ffffff;">订单详情</span>
-        <span class="order-status" :style="{background: statusColor(currentOrder.status),marginLeft:'auto'}">{{ statusText(currentOrder.status) }}</span>
+        <span class="order-status" :style="{background: currentOrder ? statusColor(currentOrder.status) : '#787890',marginLeft:'auto'}">{{ currentOrder ? statusText(currentOrder.status) : '' }}</span>
       </div>
       <!-- 商品信息（可点击查看详情） -->
-      <div class="order-good-card" @click="viewOrderGood(currentOrder)">
+      <div v-if="currentOrder" class="order-good-card" @click="viewOrderGood(currentOrder)">
         <img v-if="currentOrder.good_img_url" :src="currentOrder.good_img_url" style="width:70px;height:70px;border-radius:8px;object-fit:cover;flex-shrink:0;">
         <div style="flex:1;min-width:0;">
           <div style="font-size:15px;font-weight:600;color:#ffffff;">{{ currentOrder.good_title || '商品' }}</div>
@@ -185,7 +185,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         <span style="color:#c9a96e;align-self:center;font-size:14px;">›</span>
       </div>
       <!-- 预约信息 -->
-      <div class="appt-info">
+      <div v-if="currentOrder" class="appt-info">
         <div style="font-size:13px;"><span class="label">手机号：</span><span class="value">{{ currentOrder.phone }}</span></div>
         <div style="font-size:13px;margin-top:4px;"><span class="label">预约时间：</span><span class="value">{{ currentOrder.appointment_time }}</span></div>
       </div>
@@ -530,6 +530,9 @@ const app = createApp({
       currentOrder.value = order;
       loadChat(order.id);
     }
+    function closeOrderDetail() {
+      currentOrder.value = null;
+    }
     async function viewOrderGood(order) {
       const g = goods.value.find(g => g.id === order.good_id);
       if (g) return openDetail(g);
@@ -691,7 +694,7 @@ const app = createApp({
       chatBox, showBook, bookGood, bookForm, submitting,
       showDetail, detailGood, detailImages, timeSlots, dateOptions,
       conversations, activeConv, convMessages, convMsgInput, convChatBox,
-      openBook, submitOrder, openOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
+      openBook, submitOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
       startConsult,
       openConversation, closeConversation, sendConvMessage,
       statusText, statusColor, roleLabel, formatTime
