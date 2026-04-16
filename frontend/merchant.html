@@ -82,12 +82,12 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
     <div v-for="o in orders" :key="o.id" class="order-card" @click="openChat(o)">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-weight:600;color:var(--text-title);">{{ o.good_title || o.id.slice(-8) }}</span>
-        <span class="order-status" :style="{background: statusColor(o.status)}">{{ statusText(o.status) }}</span>
+        <span class="order-status" :style="{background: o.status === -1 ? '#5b8dd9' : statusColor(o.status)}">{{ o.status === -1 ? '咨询' : statusText(o.status) }}</span>
       </div>
       <div style="font-size:13px;color:var(--text-body);margin-top:6px;">{{ o.phone }} · {{ o.address }}</div>
       <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">预约: {{ o.appointment_time }}</div>
       <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ (o.total_fee/100).toFixed(0) }}</div>
-      <div style="margin-top:10px;display:flex;gap:8px;" @click.stop>
+      <div v-if="o.status !== -1" style="margin-top:10px;display:flex;gap:8px;" @click.stop>
         <van-button v-if="o.status===1" size="small" type="primary" @click="acceptOrder(o.id)">接单</van-button>
         <van-button v-if="o.status===2" size="small" type="success" @click="completeOrder(o.id)">完成</van-button>
       </div>
@@ -104,7 +104,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
           <div style="font-weight:600;color:var(--text-title);">{{ currentOrder.good_title || '订单沟通' }}</div>
           <div style="font-size:11px;color:var(--text-secondary);margin-top:1px;">{{ currentOrder.phone }} · {{ currentOrder.address }}</div>
         </div>
-        <span class="order-status" :style="{background: statusColor(currentOrder.status)}">{{ statusText(currentOrder.status) }}</span>
+        <span class="order-status" :style="{background: currentOrder.status === -1 ? '#5b8dd9' : statusColor(currentOrder.status)}">{{ currentOrder.status === -1 ? '咨询' : statusText(currentOrder.status) }}</span>
       </div>
       <div class="chat-messages" ref="chatBox">
         <div v-if="!messages.length" style="text-align:center;padding:40px 0;color:var(--text-secondary);font-size:13px;">暂无消息</div>
@@ -433,7 +433,7 @@ const app = createApp({
       loadGoods();
     }
 
-    function statusText(s) { return ['待支付','待接单','已接单','已完成'][s]; }
+    function statusText(s) { return {'-1':'咨询',0:'待支付',1:'待接单',2:'已接单',3:'已完成'}[s] ?? '未知'; }
     function statusColor(s) { return ['#787890','#d4a03c','#07c160','#5b8dd9'][s]; }
     function roleLabel(r) { return { CUSTOMER:'客户', MERCHANT:'商家', SERVICE:'客服' }[r] || r; }
     function formatTime(ts) {
