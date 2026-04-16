@@ -362,6 +362,10 @@ const app = createApp({
     const detailGood = ref(null);
     const detailImages = ref([]);
     const submitting = ref(false);
+    const allMessages = ref([]);
+    const chatActive = ref(false);
+    const allMsgInput = ref('');
+    const allChatBox = ref(null);
 
     const timeSlots = ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00','19:00-20:00','20:00-21:00'];
     const dateOptions = ref([]);
@@ -403,13 +407,16 @@ const app = createApp({
       if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
     }
     async function pollChat() {
-      if (!currentOrder.value) return;
-      const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
-      const newMsgs = await api(`/chat/${currentOrder.value.id}?after_id=${lastId}`);
-      if (newMsgs.length) {
-        messages.value.push(...newMsgs);
-        await nextTick();
-        if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+      if (currentOrder.value) {
+        const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
+        const newMsgs = await api(`/chat/${currentOrder.value.id}?after_id=${lastId}`);
+        if (newMsgs.length) {
+          messages.value.push(...newMsgs);
+          await nextTick();
+          if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+        }
+      } else if (chatActive.value) {
+        await pollAllChat();
       }
     }
 
@@ -505,6 +512,43 @@ const app = createApp({
       } catch (e) { vant.showToast('发送失败'); }
     }
 
+    async function loadAllChat() {
+      allMessages.value = await api('/chat/all?after_id=0');
+      await nextTick();
+      if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
+    }
+    async function pollAllChat() {
+      if (!chatActive.value) return;
+      const lastId = allMessages.value.length ? allMessages.value[allMessages.value.length - 1].id : 0;
+      const newMsgs = await api('/chat/all?after_id=' + lastId);
+      if (newMsgs.length) {
+        allMessages.value.push(...newMsgs);
+        await nextTick();
+        if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
+      }
+    }
+    function openChat() {
+      chatActive.value = true;
+      loadAllChat();
+    }
+    function closeChat() {
+      chatActive.value = false;
+      allMessages.value = [];
+    }
+    async function sendAllChat() {
+      if (!allMsgInput.value.trim()) return;
+      if (!orders.value.length) { vant.showToast('请先下单后再咨询'); return; }
+      const latestOrder = orders.value[0];
+      try {
+        await api('/chat', {
+          method: 'POST',
+          body: JSON.stringify({ order_id: latestOrder.id, content: allMsgInput.value })
+        });
+        allMsgInput.value = '';
+        await pollAllChat();
+      } catch (e) { vant.showToast('发送失败'); }
+    }
+
     function statusText(s) { return ['待支付','待接单','已接单','已完成'][s] || '未知'; }
     function statusColor(s) { return ['#999','#ff9800','#07c160','#999'][s] || '#999'; }
     function roleLabel(r) { return { CUSTOMER: '客户', MERCHANT: '商家', SERVICE: '客服' }[r] || r; }
@@ -527,9 +571,11 @@ const app = createApp({
 
     return {
       ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
-      chatBox, showBook, bookGood, bookForm, unreadCount, submitting,
+      chatBox, showBook, bookGood, bookForm, submitting,
       showDetail, detailGood, detailImages, timeSlots, dateOptions,
+      allMessages, chatActive, allMsgInput, allChatBox,
       openBook, submitOrder, openOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
+      openChat, closeChat, sendAllChat,
       statusText, statusColor, roleLabel
     };
   }
