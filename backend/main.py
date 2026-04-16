@@ -1204,9 +1204,10 @@ async def wechat_auth(code: str, db: AsyncSession = Depends(get_db)):
                 params={"access_token": g_token, "openid": openid, "lang": "zh_CN"},
             )
             info = info_resp.json()
+            print(f"[AUTH] userinfo response: {info}")
             nickname = info.get("nickname", "") or info.get("NickName", "")
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[AUTH] get nickname failed: {e}")
 
     result = await db.execute(select(User).where(User.openid == openid))
     user = result.scalar_one_or_none()
