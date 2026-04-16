@@ -651,30 +651,34 @@ const app = createApp({
           return;
         }
 
-        // 真实支付：调 WeixinJSBridge 公众号支付
-        if (typeof WeixinJSBridge === 'undefined') {
-          throw new Error('微信支付环境异常，请在微信中打开');
-        }
+        // 真实支付：调 WeixinJSBridge 公众号支付（V3 signType=RSA）
         const payParams = res.pay_params;
         await new Promise((resolve, reject) => {
-          WeixinJSBridge.invoke(
-            'getBrandWCPayRequest',
-            {
-              appId: payParams.appId,
-              timeStamp: payParams.timeStamp,
-              nonceStr: payParams.nonceStr,
-              package: payParams.package,
-              signType: payParams.signType,
-              paySign: payParams.paySign,
-            },
-            function (res) {
-              if (res.err_msg === 'get_brand_wcpay_request:ok') {
-                resolve();
-              } else {
-                reject(new Error(res.err_msg));
+          function onBridgeReady() {
+            WeixinJSBridge.invoke(
+              'getBrandWCPayRequest',
+              {
+                appId: payParams.appId,
+                timeStamp: payParams.timeStamp,
+                nonceStr: payParams.nonceStr,
+                package: payParams.package,
+                signType: payParams.signType,
+                paySign: payParams.paySign,
+              },
+              function (res) {
+                if (res.err_msg === 'get_brand_wcpay_request:ok') {
+                  resolve();
+                } else {
+                  reject(new Error(res.err_msg));
+                }
               }
-            }
-          );
+            );
+          }
+          if (typeof WeixinJSBridge === 'undefined') {
+            document.addEventListener('WeixinJSBridgeReady', onBridgeReady, false);
+          } else {
+            onBridgeReady();
+          }
         });
 
         showBook.value = false;

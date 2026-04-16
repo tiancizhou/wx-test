@@ -327,14 +327,24 @@ async def pay_create(
 
 @app.post("/pay/notify")
 async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
-    """微信支付结果回调通知"""
+    """微信支付 V3 结果回调通知（JSON 格式）"""
     body = (await request.body()).decode("utf-8")
-    data = verify_pay_notify(body)
-    if not data:
-        return Response(content="<xml><return_code><![CDATA[FAIL]]></return_code></xml>", media_type="application/xml")
+    timestamp = request.headers.get("Wechatpay-Timestamp", "")
+    nonce = request.headers.get("Wechatpay-Nonce", "")
+    signature = request.headers.get("Wechatpay-Signature", "")
 
-    if data.get("result_code") == "SUCCESS":
-        order_id = data.get("out_trade_no", "")
+    data = verify_pay_notify(timestamp, nonce, body, signature)
+    if not data:
+        return JSONResponse({"code": "FAIL", "message": "验签失败"}, status_code=400)
+
+    # V3 回调数据结构：{"event_type":"TRANSACTION.SUCCESS","resource":{...}}
+    resource = data.get("resource", {})
+    if data.get("event_type") == "TRANSACTION.SUCCESS" or resource.get("trade_state") == "SUCCESS":
+        # V3 resource 中包含 out_trade_no（开发阶段直接用 resource，生产需解密）
+        order_id = resource.get("out_trade_no", "")
+        if not order_id:
+            return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
+
         result = await db.execute(
             select(Order).where(Order.id == order_id).options(selectinload(Order.good))
         )
@@ -345,7 +355,7 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
                 order.good.sales += order.quantity or 1
             await db.commit()
 
-    return Response(content="<xml><return_code><![CDATA[SUCCESS]]></return_code></xml>", media_type="application/xml")
+    return JSONResponse({"code": "SUCCESS", "message": ""})
 
 
 # ============================================================

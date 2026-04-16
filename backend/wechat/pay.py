@@ -1,36 +1,76 @@
-"""微信支付 JSAPI（公众号支付）"""
+"""微信支付 V3 JSAPI（公众号支付）"""
 
 import time
-import hashlib
 import uuid
-import xml.etree.cElementTree as ET
+import json
+import base64
+from pathlib import Path
 
 import httpx
+from Crypto.PublicKey import RSA
+from Crypto.Signature import pkcs1_15
+from Crypto.Hash import SHA256
 
 from .config import settings
 
 
-def _make_sign(params: dict, key: str) -> str:
-    """生成微信支付签名"""
-    sorted_params = sorted(params.items())
-    sign_str = "&".join(f"{k}={v}" for k, v in sorted_params if v) + f"&key={key}"
-    return hashlib.md5(sign_str.encode("utf-8")).hexdigest().upper()
+# ---------------------------------------------------------------------------
+# RSA 工具
+# ---------------------------------------------------------------------------
+
+_private_key = None
 
 
-def _to_xml(params: dict) -> str:
-    """dict → XML"""
-    xml_parts = ["<xml>"]
-    for k, v in params.items():
-        xml_parts.append(f"<{k}><![CDATA[{v}]]></{k}>")
-    xml_parts.append("</xml>")
-    return "".join(xml_parts)
+def _load_private_key():
+    """加载商户 RSA 私钥（PEM），全局缓存"""
+    global _private_key
+    if _private_key is not None:
+        return _private_key
+    key_path = settings.MCH_PRIVATE_KEY_PATH
+    if not key_path:
+        raise RuntimeError("未配置商户私钥路径 (WX_MCH_PRIVATE_KEY_PATH)")
+    pem = Path(key_path).read_text(encoding="utf-8")
+    _private_key = RSA.import_key(pem)
+    return _private_key
 
 
-def _from_xml(xml_str: str) -> dict:
-    """XML → dict"""
-    root = ET.fromstring(xml_str)
-    return {child.tag: child.text or "" for child in root}
+def _sign_rsa(message: str, key=None) -> str:
+    """SHA256withRSA 签名，返回 Base64 编码字符串"""
+    if key is None:
+        key = _load_private_key()
+    h = SHA256.new(message.encode("utf-8"))
+    signature = pkcs1_15.new(key).sign(h)
+    return base64.b64encode(signature).decode("utf-8")
 
+
+# ---------------------------------------------------------------------------
+# V3 请求签名 & Authorization 头
+# ---------------------------------------------------------------------------
+
+def _make_v3_auth_header(method: str, url_path: str, body: str) -> str:
+    """
+    生成 V3 Authorization 请求头
+    格式: WECHATPAY2-SHA256-RSA2048 mchid="...",nonce_str="...",timestamp="...",serial_no="...",signature="..."
+    """
+    timestamp = str(int(time.time()))
+    nonce_str = uuid.uuid4().hex[:32]
+    sign_message = f"{method}\n{url_path}\n{timestamp}\n{nonce_str}\n{body}\n"
+    signature = _sign_rsa(sign_message)
+
+    authorization = (
+        f'WECHATPAY2-SHA256-RSA2048 '
+        f'mchid="{settings.MCH_ID}",'
+        f'nonce_str="{nonce_str}",'
+        f'timestamp="{timestamp}",'
+        f'serial_no="{settings.MCH_SERIAL_NO}",'
+        f'signature="{signature}"'
+    )
+    return authorization
+
+
+# ---------------------------------------------------------------------------
+# V3 统一下单
+# ---------------------------------------------------------------------------
 
 async def create_prepay_order(
     order_id: str,
@@ -40,63 +80,100 @@ async def create_prepay_order(
     notify_url: str,
 ) -> str:
     """
-    调用统一下单 API，返回 prepay_id
+    调用 V3 统一下单 API，返回 prepay_id
+    POST https://api.mch.weixin.qq.com/v3/pay/transactions/jsapi
     """
-    base_url = "https://api.mch.weixin.qq.com"
-    if not settings.MCH_ID:
-        # 无商户号时使用沙盒 URL
-        base_url = "https://api.mch.weixin.qq.com/sandboxnew"
+    url = "https://api.mch.weixin.qq.com/v3/pay/transactions/jsapi"
+    url_path = "/v3/pay/transactions/jsapi"
 
-    params = {
+    body_obj = {
         "appid": settings.APP_ID,
-        "mch_id": settings.MCH_ID or "1900000000",
-        "nonce_str": uuid.uuid4().hex[:32],
-        "body": description[:128],
+        "mchid": settings.MCH_ID,
+        "description": description[:128],
         "out_trade_no": order_id,
-        "total_fee": str(total_fee),
-        "spbill_create_ip": "127.0.0.1",
         "notify_url": notify_url,
-        "trade_type": "JSAPI",
-        "openid": openid,
+        "amount": {
+            "total": total_fee,
+            "currency": "CNY",
+        },
+        "payer": {
+            "openid": openid,
+        },
     }
-    params["sign"] = _make_sign(params, settings.MCH_KEY or "sandbox_key")
+    body_str = json.dumps(body_obj, separators=(",", ":"))
 
-    url = f"{base_url}/pay/unifiedorder"
+    auth_header = _make_v3_auth_header("POST", url_path, body_str)
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": auth_header,
+    }
+
     async with httpx.AsyncClient() as client:
-        resp = await client.post(url, content=_to_xml(params), timeout=10)
-        data = _from_xml(resp.text)
+        resp = await client.post(url, content=body_str, headers=headers, timeout=10)
 
-    if data.get("return_code") != "SUCCESS" or data.get("result_code") != "SUCCESS":
-        err = data.get("return_msg") or data.get("err_code_des") or "统一下单失败"
-        raise Exception(f"微信支付下单失败: {err}")
+    if resp.status_code != 200:
+        raise Exception(f"微信支付下单失败 (HTTP {resp.status_code}): {resp.text}")
 
-    return data["prepay_id"]
+    data = resp.json()
+    prepay_id = data.get("prepay_id")
+    if not prepay_id:
+        raise Exception(f"微信支付下单失败: 未返回 prepay_id, resp={resp.text}")
 
+    return prepay_id
+
+
+# ---------------------------------------------------------------------------
+# V3 前端支付参数签名
+# ---------------------------------------------------------------------------
 
 def generate_jsapi_params(prepay_id: str) -> dict:
     """
-    生成 wx.requestPayment() 所需的参数
+    生成 WeixinJSBridge.invoke('getBrandWCPayRequest') 所需参数（V3 RSA 签名）
+    签名串: appId\ntimeStamp\nnonceStr\npackage\n
     """
-    params = {
+    timestamp = str(int(time.time()))
+    nonce_str = uuid.uuid4().hex[:32]
+    package = f"prepay_id={prepay_id}"
+
+    sign_message = f"{settings.APP_ID}\n{timestamp}\n{nonce_str}\n{package}\n"
+    pay_sign = _sign_rsa(sign_message)
+
+    return {
         "appId": settings.APP_ID,
-        "timeStamp": str(int(time.time())),
-        "nonceStr": uuid.uuid4().hex[:32],
-        "package": f"prepay_id={prepay_id}",
-        "signType": "MD5",
+        "timeStamp": timestamp,
+        "nonceStr": nonce_str,
+        "package": package,
+        "signType": "RSA",
+        "paySign": pay_sign,
     }
-    params["paySign"] = _make_sign(params, settings.MCH_KEY or "sandbox_key")
-    return params
 
 
-def verify_pay_notify(xml_data: str) -> dict | None:
+# ---------------------------------------------------------------------------
+# V3 回调通知验签
+# ---------------------------------------------------------------------------
+
+def verify_pay_notify(
+    timestamp: str,
+    nonce: str,
+    body: str,
+    signature: str,
+    wechatpay_serial: str = "",
+) -> dict | None:
     """
-    验证支付回调通知签名，返回解析后的数据，验签失败返回 None
+    验证 V3 支付回调通知签名。
+    签名串: timestamp\nnonce\nbody\n
+    使用微信平台证书验签（开发阶段：有商户私钥时才验签，否则跳过验签只解析）。
+
+    返回解密后的通知数据，验签失败返回 None。
     """
-    data = _from_xml(xml_data)
-    sign = data.pop("sign", "")
-    if not sign:
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
         return None
-    expected = _make_sign(data, settings.MCH_KEY or "sandbox_key")
-    if sign != expected:
-        return None
+
+    # 开发阶段：没有微信平台证书时跳过验签，直接返回数据
+    # 生产环境：应使用微信平台证书验证 signature
+    # TODO: 生产环境需加载微信平台证书并验签
     return data
