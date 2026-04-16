@@ -397,6 +397,8 @@ const app = createApp({
     const convMessages = ref([]);      // 当前会话的消息
     const convMsgInput = ref('');      // 当前会话的输入框
     const convChatBox = ref(null);     // 当前会话的滚动容器 ref
+    const orderMessageCache = ref({});
+    const convMessageCache = ref({});
 
     const timeSlots = ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00','19:00-20:00','20:00-21:00'];
     const dateOptions = ref([]);
@@ -433,16 +435,20 @@ const app = createApp({
       try { user.value = await api('/me'); userId.value = user.value.id; } catch {}
     }
     async function loadChat(orderId) {
-      messages.value = await api(`/chat/${orderId}?after_id=0`);
+      messages.value = orderMessageCache.value[orderId] ? [...orderMessageCache.value[orderId]] : [];
+      const loaded = await api(`/chat/${orderId}?after_id=0`);
+      messages.value = loaded;
+      orderMessageCache.value[orderId] = [...loaded];
       await nextTick();
       if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
     }
     async function pollChat() {
-      if (currentOrder.value) {
+      if (activeTab.value === 1 && currentOrder.value) {
         const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
         const newMsgs = await api(`/chat/${currentOrder.value.id}?after_id=${lastId}`);
         if (newMsgs.length) {
           messages.value.push(...newMsgs);
+          orderMessageCache.value[currentOrder.value.id] = [...messages.value];
           await nextTick();
           if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
         }
@@ -536,12 +542,15 @@ const app = createApp({
     async function sendMessage() {
       if (!msgInput.value.trim() || !currentOrder.value) return;
       try {
-        await api('/chat', {
+        const sent = await api('/chat', {
           method: 'POST',
           body: JSON.stringify({ order_id: currentOrder.value.id, content: msgInput.value })
         });
         msgInput.value = '';
-        await pollChat();
+        messages.value.push(sent);
+        orderMessageCache.value[currentOrder.value.id] = [...messages.value];
+        await nextTick();
+        if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
     }
 
@@ -550,7 +559,10 @@ const app = createApp({
     }
     async function openConversation(conv) {
       activeConv.value = conv;
-      convMessages.value = await api(`/chat/${conv.order_id}?after_id=0`);
+      convMessages.value = convMessageCache.value[conv.order_id] ? [...convMessageCache.value[conv.order_id]] : [];
+      const loaded = await api(`/chat/${conv.order_id}?after_id=0`);
+      convMessages.value = loaded;
+      convMessageCache.value[conv.order_id] = [...loaded];
       await nextTick();
       if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
     }
@@ -564,6 +576,7 @@ const app = createApp({
       const newMsgs = await api(`/chat/${activeConv.value.order_id}?after_id=${lastId}`);
       if (newMsgs.length) {
         convMessages.value.push(...newMsgs);
+        convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
         await nextTick();
         if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       }
@@ -577,7 +590,10 @@ const app = createApp({
         showDetail.value = false;
         activeTab.value = 2;
         activeConv.value = { order_id: order.id, good_title: order.good_title, status: order.status };
-        convMessages.value = await api(`/chat/${order.id}?after_id=0`);
+        convMessages.value = convMessageCache.value[order.id] ? [...convMessageCache.value[order.id]] : [];
+        const loaded = await api(`/chat/${order.id}?after_id=0`);
+        convMessages.value = loaded;
+        convMessageCache.value[order.id] = [...loaded];
         await nextTick();
         if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       } catch (e) {
@@ -593,6 +609,7 @@ const app = createApp({
         });
         convMsgInput.value = '';
         convMessages.value.push(sent);
+        convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
         await nextTick();
         if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
