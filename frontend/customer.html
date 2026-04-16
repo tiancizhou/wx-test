@@ -113,7 +113,16 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 .appt-info .value { color: var(--text-body); }
 
 /* Profile */
-.profile-section { padding: 30px 16px; contain: layout paint; }
+.profile-section { padding: 0 0 60px; contain: layout paint; }
+.profile-card { display: flex; align-items: center; gap: 14px; padding: 28px 20px; background: linear-gradient(135deg, #252540, #1e1e36); }
+.profile-avatar { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, var(--gold), #e0c48a); color: var(--bg-primary); font-size: 22px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.profile-info { min-width: 0; }
+.profile-name { font-size: 17px; font-weight: 600; color: var(--text-title); }
+.profile-phone { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.profile-stats { display: flex; background: var(--bg-card); margin: 12px 10px; border-radius: 10px; border: 1px solid var(--border); padding: 16px 0; }
+.stat-item { flex: 1; text-align: center; cursor: pointer; }
+.stat-num { font-size: 20px; font-weight: 700; color: var(--text-title); }
+.stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 
 /* Vant dark overrides */
 .van-tabbar { background: var(--bg-card) !important; border-top: 1px solid var(--border) !important; padding-bottom: env(safe-area-inset-bottom) !important; }
@@ -269,9 +278,37 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 
   <!-- 我的 -->
   <div v-show="activeTab === 3" class="profile-section">
-    <van-cell-group inset>
-      <van-cell title="用户" :value="user.nickname || '未设置'" />
-      <van-cell title="角色" :value="user.role" />
+    <!-- 个人信息卡片 -->
+    <div class="profile-card">
+      <div class="profile-avatar">{{ (user.nickname || '用')[0] }}</div>
+      <div class="profile-info">
+        <div class="profile-name">{{ user.nickname || '未设置昵称' }}</div>
+        <div class="profile-phone">{{ user.phone || '未绑定手机号' }}</div>
+      </div>
+    </div>
+    <!-- 订单统计 -->
+    <div class="profile-stats">
+      <div class="stat-item" @click="activeTab=1">
+        <div class="stat-num">{{ orderStats.pending }}</div>
+        <div class="stat-label">待接单</div>
+      </div>
+      <div class="stat-item" @click="activeTab=1">
+        <div class="stat-num">{{ orderStats.accepted }}</div>
+        <div class="stat-label">进行中</div>
+      </div>
+      <div class="stat-item" @click="activeTab=1">
+        <div class="stat-num">{{ orderStats.completed }}</div>
+        <div class="stat-label">已完成</div>
+      </div>
+      <div class="stat-item" @click="activeTab=1">
+        <div class="stat-num">{{ orderStats.consult }}</div>
+        <div class="stat-label">咨询中</div>
+      </div>
+    </div>
+    <!-- 快捷功能 -->
+    <van-cell-group inset style="margin-top:12px;">
+      <van-cell title="联系商家" is-link @click="contactMerchant" />
+      <van-cell title="我的订单" is-link @click="activeTab=1" />
     </van-cell-group>
   </div>
 
@@ -430,6 +467,19 @@ const app = createApp({
       return !s[conv.order_id] || conv.last_msg_id > s[conv.order_id];
     }
     const unreadCount = computed(() => conversations.value.filter(c => isUnread(c)).length);
+    const orderStats = computed(() => {
+      const s = { consult: 0, pending: 0, accepted: 0, completed: 0 };
+      for (const o of orders.value) {
+        if (o.status === -1) s.consult++;
+        else if (o.status === 1) s.pending++;
+        else if (o.status === 2) s.accepted++;
+        else if (o.status === 3) s.completed++;
+      }
+      return s;
+    });
+    function contactMerchant() {
+      vant.showToast('请联系客服微信');
+    }
     const orderMessageCache = ref({});
     const convMessageCache = ref({});
 
@@ -738,7 +788,7 @@ const app = createApp({
       openBook, submitOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
       startConsult,
       openConversation, closeConversation, sendConvMessage, isUnread,
-      statusText, statusColor, statusClass, roleLabel, formatTime
+      statusText, statusColor, statusClass, roleLabel, formatTime, orderStats, contactMerchant
     };
   }
 });
