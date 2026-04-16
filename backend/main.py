@@ -1193,20 +1193,20 @@ async def wechat_auth(code: str, db: AsyncSession = Depends(get_db)):
     if data.get("is_snapshotuser") == 1:
         raise HTTPException(403, "当前为快照页模式，请点击「访问完整网页」后重试")
 
-    # 用 access_token 获取用户昵称
+    # 用全局 access_token 获取用户昵称
     nickname = ""
-    access_token = data.get("access_token")
-    if access_token:
-        try:
-            async with httpx.AsyncClient() as client:
-                info_resp = await client.get(
-                    "https://api.weixin.qq.com/sns/userinfo",
-                    params={"access_token": access_token, "openid": openid, "lang": "zh_CN"},
-                )
-                info = info_resp.json()
-                nickname = info.get("nickname", "")
-        except Exception:
-            pass
+    try:
+        from wechat.token import get_access_token
+        g_token = await get_access_token()
+        async with httpx.AsyncClient() as client:
+            info_resp = await client.get(
+                "https://api.weixin.qq.com/cgi-bin/user/info",
+                params={"access_token": g_token, "openid": openid, "lang": "zh_CN"},
+            )
+            info = info_resp.json()
+            nickname = info.get("nickname", "") or info.get("NickName", "")
+    except Exception:
+        pass
 
     result = await db.execute(select(User).where(User.openid == openid))
     user = result.scalar_one_or_none()
