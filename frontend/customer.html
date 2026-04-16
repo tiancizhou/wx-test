@@ -200,7 +200,6 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <!-- 筛选栏 -->
       <div class="filter-bar">
         <div :class="['filter-tag', orderFilter === null ? 'active' : '']" @click="clearFilter">全部</div>
-        <div :class="['filter-tag', orderFilter === -1 ? 'active' : '']" @click="orderFilter = orderFilter === -1 ? null : -1">咨询</div>
         <div :class="['filter-tag', orderFilter === 1 ? 'active' : '']" @click="orderFilter = orderFilter === 1 ? null : 1">已下单</div>
         <div :class="['filter-tag', orderFilter === 2 ? 'active' : '']" @click="orderFilter = orderFilter === 2 ? null : 2">已完成</div>
         <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">退款中</div>
@@ -255,18 +254,18 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     <!-- 会话列表 -->
     <div v-show="!activeConv" class="section-pad-bottom">
       <div v-if="!conversations.length" class="empty-state">暂无消息</div>
-      <div v-for="c in conversations" :key="c.order_id" class="order-card" @click="openConversation(c)">
+      <div v-for="c in conversations" :key="c.thread_id" class="order-card" @click="openConversation(c)">
         <div class="row-between">
           <div class="conv-title-row">
             <span v-if="c.unread_count" class="unread-badge">{{ c.unread_count }}</span>
             <span class="conv-title-text">{{ c.good_title }}</span>
-            <span v-if="c.status === -1" class="consult-badge">咨询</span>
+            <span v-if="c.thread_type === 'consultation'" class="consult-badge">咨询</span>
             <span v-else :class="['order-status', statusClass(c.status), 'status-badge-sm']">{{ statusText(c.status) }}</span>
           </div>
           <span class="meta-time time-right">{{ formatTime(c.last_time) }}</span>
         </div>
         <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
-          订单号 {{ c.order_id.slice(-8) }} · {{ formatTime(c.create_time) }}
+          {{ c.thread_type === 'consultation' ? '咨询' : '订单号 ' + c.thread_id.slice(-8) }} · {{ formatTime(c.create_time) }}
         </div>
         <div class="single-line-preview">
           {{ c.last_content }}
@@ -314,10 +313,6 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
       <div class="stat-item" @click="goToOrders(2)">
         <div class="stat-num">{{ orderStats.completed }}</div>
         <div class="stat-label">已完成</div>
-      </div>
-      <div class="stat-item" @click="goToOrders(-1)">
-        <div class="stat-num">{{ orderStats.consult }}</div>
-        <div class="stat-label">咨询中</div>
       </div>
     </div>
     <!-- 快捷功能 -->
@@ -503,22 +498,21 @@ const app = createApp({
     const detailImages = ref([]);
     const submitting = ref(false);
     const conversations = ref([]);
-    const activeConv = ref(null);      // 当前打开的会话 {order_id, good_title}
+    const activeConv = ref(null);      // 当前打开的会话 {thread_type, thread_id, good_title}
     const convMessages = ref([]);      // 当前会话的消息
     const convMsgInput = ref('');      // 当前会话的输入框
     const convChatBox = ref(null);     // 当前会话的滚动容器 ref
 
     // ---- 未读追踪 ----
     const unreadCount = computed(() => conversations.value.reduce((sum, c) => sum + (c.unread_count || 0), 0));
-    async function markRead(orderId) {
-      try { await api(`/chat/read/${orderId}`, { method: 'POST' }); } catch {}
+    async function markRead(threadType, threadId) {
+      try { await api(`/chat/read/${threadType}/${threadId}`, { method: 'POST' }); } catch {}
     }
-    const orderFilter = ref(null); // null=全部, -1=咨询, 1=已下单, 2=已完成, 3=已退款
+    const orderFilter = ref(null); // null=全部, 1=已下单, 2=已完成, 3=退款中, 4=已退款
     const orderStats = computed(() => {
-      const s = { consult: 0, ordered: 0, completed: 0 };
+      const s = { ordered: 0, completed: 0 };
       for (const o of orders.value) {
-        if (o.status === -1) s.consult++;
-        else if (o.status === 1) s.ordered++;
+        if (o.status === 1) s.ordered++;
         else if (o.status === 2) s.completed++;
       }
       return s;
@@ -596,21 +590,21 @@ const app = createApp({
     }
     async function loadChat(orderId) {
       messages.value = orderMessageCache.value[orderId] ? [...orderMessageCache.value[orderId]] : [];
-      const loaded = await api(`/chat/${orderId}?after_id=0`);
+      const loaded = await api(`/chat/order/${orderId}?after_id=0`);
       messages.value = loaded;
       orderMessageCache.value[orderId] = [...loaded];
-      if (loaded.length) markRead(orderId);
+      if (loaded.length) markRead('order', orderId);
       await nextTick();
       if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
     }
     async function pollChat() {
       if (activeTab.value === 1 && currentOrder.value) {
         const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
-        const newMsgs = await api(`/chat/${currentOrder.value.id}?after_id=${lastId}`);
+        const newMsgs = await api(`/chat/order/${currentOrder.value.id}?after_id=${lastId}`);
         if (newMsgs.length) {
           messages.value.push(...newMsgs);
           orderMessageCache.value[currentOrder.value.id] = [...messages.value];
-          markRead(currentOrder.value.id);
+          markRead('order', currentOrder.value.id);
           await nextTick();
           if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
         }
@@ -751,12 +745,12 @@ const app = createApp({
       try {
         const sent = await api('/chat', {
           method: 'POST',
-          body: JSON.stringify({ order_id: currentOrder.value.id, content: msgInput.value })
+          body: JSON.stringify({ thread_type: 'order', thread_id: currentOrder.value.id, content: msgInput.value })
         });
         msgInput.value = '';
         messages.value.push(sent);
         orderMessageCache.value[currentOrder.value.id] = [...messages.value];
-        markRead(currentOrder.value.id);
+        markRead('order', currentOrder.value.id);
         await nextTick();
         if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
@@ -770,13 +764,13 @@ const app = createApp({
       return true;
     }
     function mergeConversations(list) {
-      const prevMap = new Map(conversations.value.map(item => [item.order_id, item]));
+      const prevMap = new Map(conversations.value.map(item => [item.thread_id, item]));
       conversations.value = list.map(item => {
-        const prev = prevMap.get(item.order_id);
+        const prev = prevMap.get(item.thread_id);
         return prev ? Object.assign(prev, item) : item;
       });
       if (activeConv.value) {
-        const nextActive = conversations.value.find(item => item.order_id === activeConv.value.order_id);
+        const nextActive = conversations.value.find(item => item.thread_id === activeConv.value.thread_id);
         if (nextActive) activeConv.value = nextActive;
       }
     }
@@ -788,13 +782,14 @@ const app = createApp({
     }
     async function openConversation(conv) {
       activeConv.value = conv;
-      const cached = convMessageCache.value[conv.order_id] ? [...convMessageCache.value[conv.order_id]] : [];
+      const key = conv.thread_id;
+      const cached = convMessageCache.value[key] ? [...convMessageCache.value[key]] : [];
       convMessages.value = cached;
-      const loaded = await api(`/chat/${conv.order_id}?after_id=0`);
+      const loaded = await api(`/chat/${conv.thread_type}/${key}?after_id=0`);
       if (!sameMessages(cached, loaded)) convMessages.value = loaded;
-      convMessageCache.value[conv.order_id] = [...loaded];
-      if (loaded.length) markRead(conv.order_id);
-      else if (conv.last_msg_id) markRead(conv.order_id);
+      convMessageCache.value[key] = [...loaded];
+      if (loaded.length) markRead(conv.thread_type, key);
+      else if (conv.last_msg_id) markRead(conv.thread_type, key);
       await nextTick();
       if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
     }
@@ -804,30 +799,33 @@ const app = createApp({
     }
     async function pollConvChat() {
       if (!activeConv.value) return;
+      const key = activeConv.value.thread_id;
       const lastId = convMessages.value.length ? convMessages.value[convMessages.value.length - 1].id : 0;
-      const newMsgs = await api(`/chat/${activeConv.value.order_id}?after_id=${lastId}`);
+      const newMsgs = await api(`/chat/${activeConv.value.thread_type}/${key}?after_id=${lastId}`);
       if (newMsgs.length) {
         convMessages.value.push(...newMsgs);
-        convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
-        markRead(activeConv.value.order_id);
+        convMessageCache.value[key] = [...convMessages.value];
+        markRead(activeConv.value.thread_type, key);
         await nextTick();
         if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       }
     }
     async function startConsult(good) {
       try {
-        const order = await api('/consult', {
+        const res = await api('/consult', {
           method: 'POST',
           body: JSON.stringify({ good_id: good.id })
         });
         showDetail.value = false;
         activeTab.value = 2;
-        activeConv.value = { order_id: order.id, good_title: order.good_title, status: order.status };
-        const cached = convMessageCache.value[order.id] ? [...convMessageCache.value[order.id]] : [];
+        const conv = { thread_type: res.thread_type, thread_id: res.thread_id, good_title: res.good_title, good_img_url: res.good_img_url };
+        activeConv.value = conv;
+        const key = res.thread_id;
+        const cached = convMessageCache.value[key] ? [...convMessageCache.value[key]] : [];
         convMessages.value = cached;
-        const loaded = await api(`/chat/${order.id}?after_id=0`);
+        const loaded = await api(`/chat/${res.thread_type}/${key}?after_id=0`);
         if (!sameMessages(cached, loaded)) convMessages.value = loaded;
-        convMessageCache.value[order.id] = [...loaded];
+        convMessageCache.value[key] = [...loaded];
         await nextTick();
         if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       } catch (e) {
@@ -839,12 +837,12 @@ const app = createApp({
       try {
         const sent = await api('/chat', {
           method: 'POST',
-          body: JSON.stringify({ order_id: activeConv.value.order_id, content: convMsgInput.value })
+          body: JSON.stringify({ thread_type: activeConv.value.thread_type, thread_id: activeConv.value.thread_id, content: convMsgInput.value })
         });
         convMsgInput.value = '';
         convMessages.value.push(sent);
-        convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
-        markRead(activeConv.value.order_id);
+        convMessageCache.value[activeConv.value.thread_id] = [...convMessages.value];
+        markRead(activeConv.value.thread_type, activeConv.value.thread_id);
         await nextTick();
         if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       } catch (e) { vant.showToast('发送失败'); }
@@ -867,9 +865,9 @@ const app = createApp({
     function formatPrice(fen) { return (fen / 100).toFixed(2); }
     function isNearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
 
-    function statusText(s) { return {'-1':'咨询',0:'待付款',1:'已下单',2:'已完成',3:'退款中',4:'已退款'}[s] ?? '未知'; }
-    function statusColor(s) { return {'-1':'#5b8dd9',0:'#787890',1:'#d4a03c',2:'#07c160',3:'#e6a23c',4:'#c0564a'}[s] ?? '#787890'; }
-    function statusClass(s) { return {'-1':'status-consult',0:'status-unpaid',1:'status-pending',2:'status-completed',3:'status-pending',4:'status-unpaid'}[s] ?? 'status-unpaid'; }
+    function statusText(s) { return {0:'待付款',1:'已下单',2:'已完成',3:'退款中',4:'已退款'}[s] ?? '未知'; }
+    function statusColor(s) { return {0:'#787890',1:'#d4a03c',2:'#07c160',3:'#e6a23c',4:'#c0564a'}[s] ?? '#787890'; }
+    function statusClass(s) { return {0:'status-unpaid',1:'status-pending',2:'status-completed',3:'status-pending',4:'status-unpaid'}[s] ?? 'status-unpaid'; }
     function roleLabel(r) { return { CUSTOMER: '客户', MERCHANT: '商家' }[r] || r; }
     function formatTime(ts) {
       const d = new Date(ts * 1000);

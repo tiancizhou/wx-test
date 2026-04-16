@@ -14,7 +14,6 @@ class Role(str):
 
 
 class OrderStatus(IntEnum):
-    CONSULTATION = -1   # 咨询（未下单）
     UNPAID = 0          # 待付款
     ORDERED = 1         # 已下单
     COMPLETED = 2       # 已完成
@@ -72,27 +71,38 @@ class Order(Base):
 
     customer: Mapped["User"] = relationship(back_populates="orders")
     good: Mapped["Good"] = relationship()
-    chat_logs: Mapped[list["ChatLog"]] = relationship(back_populates="order", order_by="ChatLog.create_time")
+
+
+class Consultation(Base):
+    __tablename__ = "consultations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    good_id: Mapped[int] = mapped_column(ForeignKey("goods.id"))
+    create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
+
+    customer: Mapped["User"] = relationship()
+    good: Mapped["Good"] = relationship()
 
 
 class ChatLog(Base):
     __tablename__ = "chat_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"), index=True)
+    thread_type: Mapped[str] = mapped_column(String(16))   # "order" / "consultation"
+    thread_id: Mapped[str] = mapped_column(String(32), index=True)
     sender_id: Mapped[int] = mapped_column(Integer)
     sender_role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
     create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
 
-    order: Mapped["Order"] = relationship(back_populates="chat_logs")
-
 
 class ChatReadState(Base):
-    __tablename__ = "chat_read_states_v2"
-    __table_args__ = (PrimaryKeyConstraint("user_id", "order_id", "reader_role"),)
+    __tablename__ = "chat_read_states_v3"
+    __table_args__ = (PrimaryKeyConstraint("user_id", "thread_id", "reader_role"),)
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"))
+    thread_type: Mapped[str] = mapped_column(String(16))
+    thread_id: Mapped[str] = mapped_column(String(32))
     reader_role: Mapped[str] = mapped_column(String(16), default="")
     last_read_id: Mapped[int] = mapped_column(Integer, default=0)

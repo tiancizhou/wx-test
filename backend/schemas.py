@@ -42,11 +42,21 @@ class GoodCreate(BaseModel):
     detail_images: str = "[]"
 
 
-# ---- Order ----
+# ---- Consultation ----
 class ConsultCreate(BaseModel):
     good_id: int
 
 
+class ConsultationOut(BaseModel):
+    thread_type: str = "consultation"
+    thread_id: str
+    good_id: int
+    good_title: str = ""
+    good_img_url: str = ""
+    create_time: int
+
+
+# ---- Order ----
 class OrderOut(BaseModel):
     id: str
     customer_id: int
@@ -68,13 +78,15 @@ class OrderOut(BaseModel):
 
 # ---- Chat ----
 class ChatMessage(BaseModel):
-    order_id: str
+    thread_type: str     # "order" / "consultation"
+    thread_id: str
     content: str
 
 
 class ChatLogOut(BaseModel):
     id: int
-    order_id: str
+    thread_type: str
+    thread_id: str
     sender_id: int
     sender_role: str
     content: str
