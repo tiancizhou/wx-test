@@ -205,16 +205,39 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     </div>
   </div>
 
-  <!-- 消息Tab：订单会话列表 -->
-  <div v-show="activeTab === 2" style="padding-bottom:60px;">
-    <div v-if="!conversations.length" style="text-align:center;padding:60px 0;color:#787890;font-size:13px;">暂无消息</div>
-    <div v-for="c in conversations" :key="c.order_id" class="order-card" @click="openConversation(c)">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-weight:600;color:#ffffff;">{{ c.good_title }}</span>
-        <span style="font-size:11px;color:#787890;">{{ formatTime(c.last_time) }}</span>
+  <!-- 消息Tab -->
+  <div v-show="activeTab === 2">
+    <!-- 会话列表 -->
+    <div v-if="!activeConv" style="padding-bottom:60px;">
+      <div v-if="!conversations.length" style="text-align:center;padding:60px 0;color:#787890;font-size:13px;">暂无消息</div>
+      <div v-for="c in conversations" :key="c.order_id" class="order-card" @click="openConversation(c)">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:600;color:#ffffff;">{{ c.good_title }}</span>
+          <span style="font-size:11px;color:#787890;">{{ formatTime(c.last_time) }}</span>
+        </div>
+        <div style="font-size:13px;color:#b0b0c0;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          {{ c.last_content }}
+        </div>
       </div>
-      <div style="font-size:13px;color:#b0b0c0;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-        {{ c.last_content }}
+    </div>
+    <!-- 聊天视图 -->
+    <div v-else class="chat-wrap">
+      <div class="detail-header">
+        <span class="back-arrow" @click="closeConversation">‹</span>
+        <span style="font-weight:600;color:#ffffff;">{{ activeConv.good_title }}</span>
+      </div>
+      <div class="chat-messages" ref="convChatBox">
+        <div v-if="!convMessages.length" style="text-align:center;padding:40px 0;color:#787890;font-size:13px;">暂无消息</div>
+        <div v-for="m in convMessages" :key="m.id"
+             :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left']"
+             style="display:flex;flex-direction:column;">
+          <div class="bubble-role">{{ roleLabel(m.sender_role) }} · {{ formatTime(m.create_time) }}</div>
+          <div>{{ m.content }}</div>
+        </div>
+      </div>
+      <div class="chat-input-bar">
+        <input v-model="convMsgInput" placeholder="输入消息..." @keyup.enter="sendConvMessage">
+        <button @click="sendConvMessage">发送</button>
       </div>
     </div>
   </div>
@@ -365,6 +388,10 @@ const app = createApp({
     const detailImages = ref([]);
     const submitting = ref(false);
     const conversations = ref([]);
+    const activeConv = ref(null);      // 当前打开的会话 {order_id, good_title}
+    const convMessages = ref([]);      // 当前会话的消息
+    const convMsgInput = ref('');      // 当前会话的输入框
+    const convChatBox = ref(null);     // 当前会话的滚动容器 ref
 
     const timeSlots = ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00','19:00-20:00','20:00-21:00'];
     const dateOptions = ref([]);
@@ -414,6 +441,8 @@ const app = createApp({
           await nextTick();
           if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
         }
+      } else if (activeTab.value === 2 && activeConv.value) {
+        await pollConvChat();
       } else if (activeTab.value === 2) {
         await loadConversations();
       }
@@ -514,12 +543,38 @@ const app = createApp({
     async function loadConversations() {
       try { conversations.value = await api('/chat/conversations'); } catch {}
     }
-    function openConversation(conv) {
-      const order = orders.value.find(o => o.id === conv.order_id);
-      if (order) {
-        currentOrder.value = order;
-        activeTab.value = 1;
+    async function openConversation(conv) {
+      activeConv.value = conv;
+      convMessages.value = await api(`/chat/${conv.order_id}?after_id=0`);
+      await nextTick();
+      if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
+    }
+    function closeConversation() {
+      activeConv.value = null;
+      convMessages.value = [];
+    }
+    async function pollConvChat() {
+      if (!activeConv.value) return;
+      const lastId = convMessages.value.length ? convMessages.value[convMessages.value.length - 1].id : 0;
+      const newMsgs = await api(`/chat/${activeConv.value.order_id}?after_id=${lastId}`);
+      if (newMsgs.length) {
+        convMessages.value.push(...newMsgs);
+        await nextTick();
+        if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
       }
+    }
+    async function sendConvMessage() {
+      if (!convMsgInput.value.trim() || !activeConv.value) return;
+      try {
+        const sent = await api('/chat', {
+          method: 'POST',
+          body: JSON.stringify({ order_id: activeConv.value.order_id, content: convMsgInput.value })
+        });
+        convMsgInput.value = '';
+        convMessages.value.push(sent);
+        await nextTick();
+        if (convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
+      } catch (e) { vant.showToast('发送失败'); }
     }
     // 切换到消息Tab时自动加载会话列表
     watch(activeTab, (tab) => {
@@ -565,9 +620,9 @@ const app = createApp({
       ready, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
       chatBox, showBook, bookGood, bookForm, submitting,
       showDetail, detailGood, detailImages, timeSlots, dateOptions,
-      conversations,
+      conversations, activeConv, convMessages, convMsgInput, convChatBox,
       openBook, submitOrder, openOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
-      openConversation,
+      openConversation, closeConversation, sendConvMessage,
       statusText, statusColor, roleLabel, formatTime
     };
   }
