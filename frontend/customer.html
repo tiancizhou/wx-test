@@ -725,18 +725,21 @@ const app = createApp({
         if (nextActive) activeConv.value = nextActive;
       }
     }
+    let convsLoadedOnce = false;
     async function loadConversations() {
       try {
         const list = await api('/chat/conversations');
-        // 检测新消息：对比上次记录的 last_msg_id
         for (const c of list) {
           if (c.last_msg_id && prevConvMsgIds[c.order_id] !== undefined && c.last_msg_id > prevConvMsgIds[c.order_id]) {
-            // 有新消息且当前不在该会话中
             const inThisConv = activeConv.value && activeConv.value.order_id === c.order_id;
             if (!inThisConv) notifyNewMessage(c.last_sender_role || '', c.last_content || '');
+          } else if (!convsLoadedOnce && c.unread_count > 0) {
+            // 页面首次加载时有未读消息，也通知
+            notifyNewMessage(c.last_sender_role || '', c.last_content || '');
           }
           prevConvMsgIds[c.order_id] = c.last_msg_id || 0;
         }
+        convsLoadedOnce = true;
         mergeConversations(list);
       } catch {}
     }
