@@ -158,6 +158,15 @@ async def list_goods(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
+@app.get("/goods/{good_id}", response_model=GoodOut)
+async def get_good(good_id: int, db: AsyncSession = Depends(get_db)):
+    """获取单个商品详情（含已下架）"""
+    good = await db.get(Good, good_id)
+    if not good:
+        raise HTTPException(404, "商品不存在")
+    return good
+
+
 @app.get("/goods/all", response_model=list[GoodOut])
 async def list_all_goods(
     db: AsyncSession = Depends(get_db),

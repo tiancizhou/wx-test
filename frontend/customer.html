@@ -411,9 +411,14 @@ const app = createApp({
       currentOrder.value = order;
       loadChat(order.id);
     }
-    function viewOrderGood(order) {
+    async function viewOrderGood(order) {
       const g = goods.value.find(g => g.id === order.good_id);
-      if (g) openDetail(g);
+      if (g) return openDetail(g);
+      // 商品不在本地列表（可能已下架），从后端获取
+      try {
+        const resp = await api('/goods/' + order.good_id);
+        if (resp) openDetail(resp);
+      } catch { vant.showToast('商品已删除'); }
     }
     async function sendMessage() {
       if (!msgInput.value.trim() || !currentOrder.value) return;
