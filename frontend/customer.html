@@ -531,9 +531,14 @@ const app = createApp({
     }
 
     async function loadAllChat() {
-      allMessages.value = await api('/chat/all?after_id=0');
-      await nextTick();
-      if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
+      try {
+        allMessages.value = await api('/chat/all?after_id=0');
+        await nextTick();
+        if (allChatBox.value) allChatBox.value.scrollTop = allChatBox.value.scrollHeight;
+      } catch (e) {
+        console.error('loadAllChat error:', e);
+        vant.showToast('加载消息失败');
+      }
     }
     async function pollAllChat() {
       if (!chatActive.value) return;
@@ -552,7 +557,7 @@ const app = createApp({
     }
     function closeChat() {
       chatActive.value = false;
-      allMessages.value = [];
+      // 保留 allMessages，重新打开时用户可立即看到旧记录，openChat 会刷新
     }
     async function sendAllChat() {
       if (!allMsgInput.value.trim()) return;
