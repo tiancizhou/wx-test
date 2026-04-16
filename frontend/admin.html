@@ -77,7 +77,6 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
       <van-radio-group v-model="createForm.role" direction="horizontal" style="padding:0 16px;">
         <van-radio name="CUSTOMER" style="margin-right:12px;">客户</van-radio>
         <van-radio name="MERCHANT" style="margin-right:12px;">商家</van-radio>
-        <van-radio name="SERVICE" style="margin-right:12px;">客服</van-radio>
         <van-radio name="ADMIN">管理员</van-radio>
       </van-radio-group>
       <van-button type="primary" block round style="margin-top:16px;" @click="createUser">创建</van-button>
@@ -96,7 +95,6 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
       <van-radio-group v-model="editForm.role" direction="horizontal" style="padding:0 16px;">
         <van-radio name="CUSTOMER" style="margin-right:12px;">客户</van-radio>
         <van-radio name="MERCHANT" style="margin-right:12px;">商家</van-radio>
-        <van-radio name="SERVICE" style="margin-right:12px;">客服</van-radio>
         <van-radio name="ADMIN">管理员</van-radio>
       </van-radio-group>
       <van-button type="primary" block round style="margin-top:16px;" @click="updateUser">保存</van-button>
@@ -228,11 +226,11 @@ const app = createApp({
     }
 
     function roleColor(r) {
-      return { CUSTOMER: '#07c160', MERCHANT: '#1890ff', SERVICE: '#ff9800', ADMIN: '#e74c3c' }[r] || '#999';
+      return { CUSTOMER: '#07c160', MERCHANT: '#1890ff', ADMIN: '#e74c3c' }[r] || '#999';
     }
 
     function roleName(r) {
-      return { CUSTOMER: '客户', MERCHANT: '商家', SERVICE: '客服', ADMIN: '管理员' }[r] || r;
+      return { CUSTOMER: '客户', MERCHANT: '商家', ADMIN: '管理员' }[r] || r;
     }
 
     onMounted(async () => {

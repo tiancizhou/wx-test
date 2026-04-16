@@ -380,7 +380,7 @@ async def my_orders(
 @app.get("/orders/pending", response_model=list[OrderOut])
 async def pending_orders(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.SERVICE, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
 ):
     result = await db.execute(
         select(Order).options(selectinload(Order.good))
@@ -430,7 +430,7 @@ async def create_consult(
 @app.get("/orders/active")
 async def active_orders(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_role(Role.MERCHANT, Role.SERVICE, Role.ADMIN)),
+    user: User = Depends(require_role(Role.MERCHANT, Role.ADMIN)),
 ):
     result = await db.execute(
         select(Order).options(selectinload(Order.good))
