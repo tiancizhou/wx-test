@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, init_db
 from models import User, Good, Order, OrderStatus, ChatLog, Role
-from schemas import GoodOut, GoodUpdate, GoodCreate, OrderCreate, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
+from schemas import GoodOut, GoodUpdate, GoodCreate, OrderCreate, ConsultCreate, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
 from deps import get_current_user, require_role
 
 
@@ -386,6 +386,44 @@ async def pending_orders(
         .where(Order.status == OrderStatus.PENDING).order_by(Order.create_time.desc())
     )
     return [_order_to_out(o) for o in result.scalars().all()]
+
+
+@app.post("/consult", response_model=OrderOut)
+async def create_consult(
+    data: ConsultCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """客户：发起或获取商品咨询会话（同一用户+商品只建一个）"""
+    existing = await db.execute(
+        select(Order).options(selectinload(Order.good))
+        .where(
+            Order.customer_id == user.id,
+            Order.good_id == data.good_id,
+            Order.status == OrderStatus.CONSULTATION,
+        )
+    )
+    order = existing.scalar_one_or_none()
+    if order:
+        return _order_to_out(order)
+
+    order = Order(
+        customer_id=user.id,
+        good_id=data.good_id,
+        status=OrderStatus.CONSULTATION,
+        total_fee=0,
+        phone="",
+        address="",
+        appointment_time="",
+    )
+    db.add(order)
+    await db.commit()
+    await db.refresh(order)
+    result = await db.execute(
+        select(Order).options(selectinload(Order.good)).where(Order.id == order.id)
+    )
+    order = result.scalar_one()
+    return _order_to_out(order)
 
 
 @app.get("/orders/active", response_model=list[OrderOut])
