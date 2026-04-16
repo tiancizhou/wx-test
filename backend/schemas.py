@@ -52,6 +52,7 @@ class OrderCreate(BaseModel):
     phone: str
     address: str
     appointment_time: str
+    quantity: int = 1
 
 
 class OrderOut(BaseModel):
@@ -62,6 +63,7 @@ class OrderOut(BaseModel):
     address: str
     appointment_time: str
     total_fee: int
+    quantity: int = 1
     status: int
     create_time: int
     good_title: str = ""

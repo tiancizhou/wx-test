@@ -384,6 +384,14 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         <div style="font-size:13px;color:#b0b0c0;margin-bottom:4px;">手机号 *</div>
         <input v-model="bookForm.phone" type="tel" placeholder="请输入手机号">
       </div>
+      <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:13px;color:#b0b0c0;">数量</span>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div @click="bookForm.quantity = Math.max(1, bookForm.quantity - 1)" style="width:28px;height:28px;border-radius:14px;border:1px solid #3a3a5c;display:flex;align-items:center;justify-content:center;color:#b0b0c0;font-size:16px;cursor:pointer;">-</div>
+          <span style="font-size:16px;font-weight:600;color:#ffffff;min-width:20px;text-align:center;">{{ bookForm.quantity }}</span>
+          <div @click="bookForm.quantity++" style="width:28px;height:28px;border-radius:14px;border:1px solid #3a3a5c;display:flex;align-items:center;justify-content:center;color:#b0b0c0;font-size:16px;cursor:pointer;">+</div>
+        </div>
+      </div>
       <div style="margin-bottom:12px;">
         <div style="font-size:13px;color:#b0b0c0;margin-bottom:6px;">选择日期 *</div>
         <div style="display:flex;gap:8px;">
@@ -403,7 +411,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         </div>
       </div>
       <van-button type="primary" block round @click="submitOrder" :loading="submitting" :disabled="!bookForm.phone || !bookForm.timeSlot">
-        确认下单 · ¥{{ ((bookGood?.price||0)/100).toFixed(0) }}
+        确认下单 · ¥{{ ((bookGood?.price||0)/100 * bookForm.quantity).toFixed(0) }}
       </van-button>
     </div>
   </van-popup>
@@ -481,7 +489,7 @@ const app = createApp({
     const chatBox = ref(null);
     const showBook = ref(false);
     const bookGood = ref(null);
-    const bookForm = ref({ phone: '', date: '', timeSlot: '' });
+    const bookForm = ref({ phone: '', date: '', timeSlot: '', quantity: 1 });
     const showDetail = ref(false);
     const detailGood = ref(null);
     const detailImages = ref([]);
@@ -613,7 +621,7 @@ const app = createApp({
     function openBook(g) {
       bookGood.value = g;
       initDateOptions();
-      bookForm.value = { phone: '', date: dateOptions.value[0]?.value || '', timeSlot: '' };
+      bookForm.value = { phone: '', date: dateOptions.value[0]?.value || '', timeSlot: '', quantity: 1 };
       showBook.value = true;
     }
     async function submitOrder() {
@@ -626,6 +634,7 @@ const app = createApp({
             good_id: bookGood.value.id,
             phone: bookForm.value.phone,
             address: '',
+            quantity: bookForm.value.quantity,
             appointment_time: bookForm.value.date + ' ' + bookForm.value.timeSlot,
           }),
         });

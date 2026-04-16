@@ -33,6 +33,7 @@ def _order_to_out(order: Order) -> dict:
         "address": order.address,
         "appointment_time": order.appointment_time,
         "total_fee": order.total_fee,
+        "quantity": order.quantity,
         "status": order.status,
         "create_time": order.create_time,
         "good_title": good.title if good else "",
@@ -353,16 +354,18 @@ async def create_order(
     if not good:
         raise HTTPException(404, "商品不存在")
 
+    qty = data.quantity if data.quantity > 0 else 1
     order = Order(
         customer_id=user.id,
         phone=data.phone,
         address=data.address,
         appointment_time=data.appointment_time,
-        total_fee=good.price,
+        total_fee=good.price * qty,
+        quantity=qty,
         status=OrderStatus.PENDING,
     )
     db.add(order)
-    good.sales += 1
+    good.sales += qty
     await db.commit()
     await db.refresh(order)
     return order

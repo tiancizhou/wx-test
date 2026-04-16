@@ -107,6 +107,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
             <div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">{{ detailOrder.good_duration }}分钟</div>
             <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px;">
               <span style="color:var(--gold);font-size:16px;font-weight:700;">¥{{ (detailOrder.total_fee/100).toFixed(0) }}</span>
+              <span v-if="detailOrder.quantity > 1" style="font-size:12px;color:var(--text-secondary);margin-left:4px;">x{{ detailOrder.quantity }}</span>
             </div>
           </div>
         </div>
@@ -117,6 +118,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         <div class="order-detail-row"><span class="order-detail-label">下单时间</span><span class="order-detail-value">{{ formatTime(detailOrder.create_time) }}</span></div>
         <div class="order-detail-row"><span class="order-detail-label">客户电话</span><span class="order-detail-value">{{ detailOrder.phone }}</span></div>
         <div class="order-detail-row"><span class="order-detail-label">预约时间</span><span class="order-detail-value">{{ detailOrder.appointment_time }}</span></div>
+        <div class="order-detail-row"><span class="order-detail-label">数量</span><span class="order-detail-value">{{ detailOrder.quantity || 1 }}</span></div>
       </div>
       <!-- 操作按钮 -->
       <div style="padding:0 10px;display:flex;gap:8px;">
@@ -146,7 +148,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         </div>
         <div style="font-size:13px;color:var(--text-body);margin-top:6px;">{{ o.phone }}</div>
         <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">预约: {{ o.appointment_time }}</div>
-        <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ (o.total_fee/100).toFixed(0) }}</div>
+        <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ (o.total_fee/100).toFixed(0) }}<span v-if="o.quantity > 1" style="font-size:12px;color:var(--text-secondary);margin-left:4px;">x{{ o.quantity }}</span></div>
         <div v-if="o.status !== -1" style="margin-top:10px;display:flex;gap:8px;" @click.stop>
           <van-button v-if="o.status===1" size="small" type="primary" @click="acceptOrder(o.id)">接单</van-button>
           <van-button v-if="o.status===2" size="small" type="success" @click="completeOrder(o.id)">完成</van-button>

@@ -63,6 +63,7 @@ class Order(Base):
     address: Mapped[str] = mapped_column(String(256), default="")
     appointment_time: Mapped[str] = mapped_column(String(32), default="")
     total_fee: Mapped[int] = mapped_column(Integer, default=0, comment="金额，单位分")
+    quantity: Mapped[int] = mapped_column(Integer, default=1, comment="商品数量")
     status: Mapped[int] = mapped_column(Integer, default=OrderStatus.UNPAID)
     create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
 
