@@ -463,7 +463,7 @@ async function wxJSSDKInit() {
       timestamp: cfg.timestamp,
       nonceStr: cfg.nonceStr,
       signature: cfg.signature,
-      jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData', 'getLocation']
+      jsApiList: ['updateAppMessageShareData', 'updateTimelineShareData', 'getLocation', 'chooseWXPay']
     });
   } catch (e) {
     console.warn('JS-SDK 初始化失败:', e);
@@ -648,19 +648,27 @@ const app = createApp({
           return;
         }
 
-        // 真实支付：调 wx.requestPayment
+        // 真实支付：调 WeixinJSBridge 公众号支付
         const payParams = res.pay_params;
         await new Promise((resolve, reject) => {
-          wx.requestPayment({
-            appId: payParams.appId,
-            timeStamp: payParams.timeStamp,
-            nonceStr: payParams.nonceStr,
-            package: payParams.package,
-            signType: payParams.signType,
-            paySign: payParams.paySign,
-            success: resolve,
-            fail: reject,
-          });
+          WeixinJSBridge.invoke(
+            'getBrandWCPayRequest',
+            {
+              appId: payParams.appId,
+              timeStamp: payParams.timeStamp,
+              nonceStr: payParams.nonceStr,
+              package: payParams.package,
+              signType: payParams.signType,
+              paySign: payParams.paySign,
+            },
+            function (res) {
+              if (res.err_msg === 'get_brand_wcpay_request:ok') {
+                resolve();
+              } else {
+                reject(new Error(res.err_msg));
+              }
+            }
+          );
         });
 
         showBook.value = false;
@@ -668,10 +676,11 @@ const app = createApp({
         loadOrders();
         activeTab.value = 1;
       } catch (e) {
-        if (e.errMsg && e.errMsg.includes('cancel')) {
+        const msg = e.message || e.errMsg || e;
+        if (msg.includes('cancel') || msg.includes('get_brand_wcpay_request:cancel')) {
           vant.showToast('已取消支付');
         } else {
-          vant.showToast('下单失败: ' + (e.message || e.errMsg || e));
+          vant.showToast('下单失败: ' + msg);
         }
       } finally {
         submitting.value = false;

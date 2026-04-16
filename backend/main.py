@@ -275,11 +275,14 @@ async def pay_create(
     phone = body.get("phone", "")
     address = body.get("address", "")
     appointment_time = body.get("appointment_time", "")
+    qty = body.get("quantity", 1) or 1
 
     result = await db.execute(select(Good).where(Good.id == good_id, Good.is_active == True))
     good = result.scalar_one_or_none()
     if not good:
         raise HTTPException(404, "商品不存在")
+
+    total_fee = good.price * qty
 
     # 创建 UNPAID 订单
     order = Order(
@@ -288,7 +291,8 @@ async def pay_create(
         phone=phone,
         address=address,
         appointment_time=appointment_time,
-        total_fee=good.price,
+        quantity=qty,
+        total_fee=total_fee,
         status=OrderStatus.UNPAID,
     )
     db.add(order)
@@ -298,6 +302,7 @@ async def pay_create(
     # Mock 模式：直接标记为已支付
     if settings.PAY_MOCK:
         order.status = OrderStatus.PENDING
+        good.sales += qty
         await db.commit()
         return {"mock": True, "order_id": order.id, "status": "PAID"}
 
@@ -307,7 +312,7 @@ async def pay_create(
         prepay_id = await create_prepay_order(
             order_id=order.id,
             openid=user.openid,
-            total_fee=good.price,
+            total_fee=total_fee,
             description=good.title[:128],
             notify_url=notify_url,
         )
@@ -330,10 +335,14 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
 
     if data.get("result_code") == "SUCCESS":
         order_id = data.get("out_trade_no", "")
-        result = await db.execute(select(Order).where(Order.id == order_id))
+        result = await db.execute(
+            select(Order).where(Order.id == order_id).options(selectinload(Order.good))
+        )
         order = result.scalar_one_or_none()
         if order and order.status == OrderStatus.UNPAID:
             order.status = OrderStatus.PENDING
+            if order.good:
+                order.good.sales += order.quantity or 1
             await db.commit()
 
     return Response(content="<xml><return_code><![CDATA[SUCCESS]]></return_code></xml>", media_type="application/xml")
