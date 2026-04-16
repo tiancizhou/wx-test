@@ -360,6 +360,7 @@ async def create_order(
         status=OrderStatus.PENDING,
     )
     db.add(order)
+    good.sales += 1
     await db.commit()
     await db.refresh(order)
     return order
