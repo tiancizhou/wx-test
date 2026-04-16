@@ -54,6 +54,22 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 .status-pending { background: #d4a03c; }
 .status-accepted { background: #07c160; }
 .status-completed { background: #787890; }
+.section-pad-bottom { padding-bottom: 60px; }
+.empty-state { text-align: center; padding: 60px 0; color: #787890; font-size: 13px; }
+.row-between { display: flex; justify-content: space-between; align-items: center; }
+.title-white { font-weight: 600; color: #ffffff; }
+.subtle-text { font-size: 13px; color: #b0b0c0; }
+.gold-price { color: #c9a96e; font-weight: 600; }
+.chat-bubble-col { display: flex; flex-direction: column; }
+.meta-time { font-size: 11px; color: #787890; }
+.conv-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.conv-title-text { font-weight: 600; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.consult-badge { flex-shrink: 0; font-size: 10px; border: 1px solid var(--gold); color: var(--gold); padding: 1px 6px; border-radius: 8px; }
+.status-badge-sm { font-size: 10px; padding: 1px 8px; }
+.time-right { flex-shrink: 0; margin-left: 8px; }
+.single-line-preview { font-size: 13px; color: #b0b0c0; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-summary-text { font-size: 13px; color: #b0b0c0; margin-top: 8px; }
+.order-price { font-size: 15px; color: #c9a96e; margin-top: 6px; font-weight: 600; }
 
 /* Chat */
 .chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 50px - env(safe-area-inset-bottom)); background: var(--bg-chat); contain: layout paint; }
@@ -157,24 +173,24 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
   <!-- 订单Tab：列表 / 详情切换 -->
   <div v-show="activeTab === 1">
     <!-- 订单列表视图 -->
-    <div v-show="!currentOrder" style="padding-bottom:60px;">
-      <div v-if="!orders.length" style="text-align:center;padding:60px 0;color:#787890;">暂无订单</div>
+    <div v-show="!currentOrder" class="section-pad-bottom">
+      <div v-if="!orders.length" class="empty-state">暂无订单</div>
       <div v-for="o in orders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:600;color:#ffffff;">{{ o.good_title || '商品' }}</span>
+        <div class="row-between">
+          <span class="title-white">{{ o.good_title || '商品' }}</span>
           <span :class="['order-status', statusClass(o.status)]">{{ statusText(o.status) }}</span>
         </div>
-        <div style="font-size:13px;color:#b0b0c0;margin-top:8px;">
+        <div class="order-summary-text">
           {{ o.phone }} · {{ o.appointment_time }}
         </div>
-        <div style="font-size:15px;color:#c9a96e;margin-top:6px;font-weight:600;">¥{{ (o.total_fee/100).toFixed(0) }}</div>
+        <div class="order-price">¥{{ (o.total_fee/100).toFixed(0) }}</div>
       </div>
     </div>
     <!-- 订单详情视图 -->
     <div v-show="currentOrder" class="chat-wrap">
       <div class="detail-header">
         <span class="back-arrow" @click="closeOrderDetail">‹</span>
-        <span style="font-weight:600;color:#ffffff;">订单详情</span>
+        <span class="title-white">订单详情</span>
         <span :class="['order-status', currentOrder ? statusClass(currentOrder.status) : 'status-unpaid']" style="margin-left:auto;">{{ currentOrder ? statusText(currentOrder.status) : '' }}</span>
       </div>
       <!-- 商品信息（可点击查看详情） -->
@@ -195,10 +211,9 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         <div style="font-size:13px;margin-top:4px;"><span class="label">预约时间：</span><span class="value">{{ currentOrder.appointment_time }}</span></div>
       </div>
       <div class="chat-messages" ref="chatBox">
-        <div v-if="!messages.length" style="text-align:center;padding:40px 0;color:#787890;font-size:13px;">暂无消息</div>
+        <div v-if="!messages.length" class="empty-state" style="padding:40px 0;">暂无消息</div>
         <div v-for="m in messages" :key="m.id"
-             :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left']"
-             style="display:flex;flex-direction:column;">
+             :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left', 'chat-bubble-col']">
           <div class="bubble-role">{{ roleLabel(m.sender_role) }} · {{ formatTime(m.create_time) }}</div>
           <div>{{ m.content }}</div>
         </div>
@@ -213,18 +228,18 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
   <!-- 消息Tab -->
   <div v-show="activeTab === 2">
     <!-- 会话列表 -->
-    <div v-show="!activeConv" style="padding-bottom:60px;">
-      <div v-if="!conversations.length" style="text-align:center;padding:60px 0;color:#787890;font-size:13px;">暂无消息</div>
+    <div v-show="!activeConv" class="section-pad-bottom">
+      <div v-if="!conversations.length" class="empty-state">暂无消息</div>
       <div v-for="c in conversations" :key="c.order_id" class="order-card" @click="openConversation(c)">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div style="display:flex;align-items:center;gap:6px;min-width:0;">
-            <span style="font-weight:600;color:#ffffff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ c.good_title }}</span>
-            <span v-if="c.status === -1" style="flex-shrink:0;font-size:10px;border:1px solid var(--gold);color:var(--gold);padding:1px 6px;border-radius:8px;">咨询</span>
-            <span v-else :class="['order-status', statusClass(c.status)]" style="font-size:10px;padding:1px 8px;">{{ statusText(c.status) }}</span>
+        <div class="row-between">
+          <div class="conv-title-row">
+            <span class="conv-title-text">{{ c.good_title }}</span>
+            <span v-if="c.status === -1" class="consult-badge">咨询</span>
+            <span v-else :class="['order-status', statusClass(c.status), 'status-badge-sm']">{{ statusText(c.status) }}</span>
           </div>
-          <span style="flex-shrink:0;font-size:11px;color:#787890;margin-left:8px;">{{ formatTime(c.last_time) }}</span>
+          <span class="meta-time time-right">{{ formatTime(c.last_time) }}</span>
         </div>
-        <div style="font-size:13px;color:#b0b0c0;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+        <div class="single-line-preview">
           {{ c.last_content }}
         </div>
       </div>
@@ -233,13 +248,12 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     <div v-show="activeConv" class="chat-wrap">
       <div class="detail-header">
         <span class="back-arrow" @click="closeConversation">‹</span>
-        <span style="font-weight:600;color:#ffffff;">{{ activeConv?.good_title }}</span>
+        <span class="title-white">{{ activeConv?.good_title }}</span>
       </div>
       <div class="chat-messages" ref="convChatBox">
-        <div v-if="!convMessages.length" style="text-align:center;padding:40px 0;color:#787890;font-size:13px;">暂无消息</div>
+        <div v-if="!convMessages.length" class="empty-state" style="padding:40px 0;">暂无消息</div>
         <div v-for="m in convMessages" :key="m.id"
-             :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left']"
-             style="display:flex;flex-direction:column;">
+             :class="['bubble', m.sender_id === userId ? 'bubble-right' : 'bubble-left', 'chat-bubble-col']">
           <div class="bubble-role">{{ roleLabel(m.sender_role) }} · {{ formatTime(m.create_time) }}</div>
           <div>{{ m.content }}</div>
         </div>
