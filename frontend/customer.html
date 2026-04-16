@@ -487,6 +487,18 @@ const app = createApp({
     const convMsgInput = ref('');      // 当前会话的输入框
     const convChatBox = ref(null);     // 当前会话的滚动容器 ref
 
+    // ---- 新消息通知 ----
+    let lastNotifiedMsgId = 0;
+    function notifyNewMessage(senderRole, content) {
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRl9vT19teleUEFNRQAAAAEASAAAAIAAAABAAQAIABAAAAA');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+      } catch {}
+      const label = senderRole === 'MERCHANT' ? '商家' : senderRole === 'SERVICE' ? '客服' : '对方';
+      vant.showToast({ message: `${label}: ${content.slice(0, 20)}${content.length > 20 ? '...' : ''}`, type: 'html', duration: 3000, icon: 'chat-o' });
+    }
+
     // ---- 未读追踪 ----
     const READ_KEY = 'wx_read_msg';
     function getReadState() { try { return JSON.parse(localStorage.getItem(READ_KEY) || '{}'); } catch { return {}; } }
@@ -590,6 +602,11 @@ const app = createApp({
         const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
         const newMsgs = await api(`/chat/${currentOrder.value.id}?after_id=${lastId}`);
         if (newMsgs.length) {
+          const fromOther = newMsgs.filter(m => m.sender_id !== userId.value);
+          if (fromOther.length) {
+            const last = fromOther[fromOther.length - 1];
+            if (last.id > lastNotifiedMsgId) { lastNotifiedMsgId = last.id; notifyNewMessage(last.sender_role, last.content); }
+          }
           messages.value.push(...newMsgs);
           orderMessageCache.value[currentOrder.value.id] = [...messages.value];
           markRead(currentOrder.value.id, messages.value[messages.value.length - 1].id);
@@ -746,6 +763,11 @@ const app = createApp({
       const lastId = convMessages.value.length ? convMessages.value[convMessages.value.length - 1].id : 0;
       const newMsgs = await api(`/chat/${activeConv.value.order_id}?after_id=${lastId}`);
       if (newMsgs.length) {
+        const fromOther = newMsgs.filter(m => m.sender_id !== userId.value);
+        if (fromOther.length) {
+          const last = fromOther[fromOther.length - 1];
+          if (last.id > lastNotifiedMsgId) { lastNotifiedMsgId = last.id; notifyNewMessage(last.sender_role, last.content); }
+        }
         convMessages.value.push(...newMsgs);
         convMessageCache.value[activeConv.value.order_id] = [...convMessages.value];
         markRead(activeConv.value.order_id, convMessages.value[convMessages.value.length - 1].id);
