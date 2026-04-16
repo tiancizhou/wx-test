@@ -1178,6 +1178,15 @@ async def mp_verify(file_id: str):
     raise HTTPException(404)
 
 
+@app.get("/{verify_file}.txt")
+async def wechat_verify_file(verify_file: str):
+    """微信验证文件（根路径，如域名验证、业务域名验证）"""
+    f = STATIC_DIR / f"{verify_file}.txt"
+    if f.exists():
+        return FileResponse(f, media_type="text/plain")
+    raise HTTPException(404)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8080, reload=True)
