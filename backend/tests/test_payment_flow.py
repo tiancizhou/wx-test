@@ -85,6 +85,20 @@ async def test_mock_confirm_marks_order_paid_and_increments_sales(
 
 
 @pytest.mark.asyncio
+async def test_mock_confirm_is_unavailable_when_pay_mock_is_false(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "PAY_MOCK", False)
+
+    response = await client.post("/pay/mock/confirm/mock-disabled-order", headers=auth_headers)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "仅 mock 模式可用"}
+
+
+@pytest.mark.asyncio
 async def test_mock_query_returns_success_after_mock_confirm(
     client,
     auth_headers,
