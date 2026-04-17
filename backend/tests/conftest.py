@@ -44,7 +44,7 @@ async def db_session(session_factory):
 
 
 @pytest_asyncio.fixture
-async def seeded_data(session_factory):
+async def seeded_session(session_factory):
     async with session_factory() as session:
         customer = User(
             openid="test_customer",
@@ -75,11 +75,17 @@ async def seeded_data(session_factory):
         await session.refresh(merchant)
         await session.refresh(good)
 
-        return {
+        session.info["seeded_data"] = {
             "customer": customer,
             "merchant": merchant,
             "good": good,
         }
+        yield session
+
+
+@pytest.fixture
+def seeded_data(seeded_session):
+    return seeded_session.info["seeded_data"]
 
 
 @pytest.fixture
@@ -98,8 +104,13 @@ def seeded_good(seeded_data):
 
 
 @pytest.fixture
-def customer_headers(customer_user):
+def auth_headers(customer_user):
     return {"X-Token": customer_user.openid}
+
+
+@pytest.fixture
+def customer_headers(auth_headers):
+    return auth_headers
 
 
 @pytest.fixture
@@ -108,10 +119,9 @@ def merchant_headers(merchant_user):
 
 
 @pytest.fixture
-def app(session_factory):
+def app(seeded_session):
     async def override_get_db():
-        async with session_factory() as session:
-            yield session
+        yield seeded_session
 
     main_module.app.dependency_overrides[database_module.get_db] = override_get_db
     main_module.app.dependency_overrides[main_module.get_db] = override_get_db
@@ -122,7 +132,7 @@ def app(session_factory):
 
 
 @pytest_asyncio.fixture
-async def client(app):
+async def client(app, seeded_session):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as async_client:
         yield async_client
