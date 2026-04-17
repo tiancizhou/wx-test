@@ -96,6 +96,28 @@ def test_prod_mode_requires_payment_key_fields(monkeypatch):
         settings.validate_payment_config(require_platform_public_key=True)
 
 
+def test_prod_mode_allows_empty_platform_serial_when_public_key_path_exists(monkeypatch):
+    monkeypatch.setattr(settings, "PAY_MOCK", False)
+    monkeypatch.setattr(settings, "PLATFORM_SERIAL_NO", "", raising=False)
+
+    settings.validate_payment_config(require_platform_public_key=True)
+
+
+def test_prod_mode_requires_existing_payment_key_files(monkeypatch, tmp_path):
+    missing_private_key_path = tmp_path / "missing_merchant_private_key.pem"
+    missing_platform_public_key_path = tmp_path / "missing_platform_public_key.pem"
+
+    monkeypatch.setattr(settings, "PAY_MOCK", False)
+    monkeypatch.setattr(settings, "MCH_PRIVATE_KEY_PATH", str(missing_private_key_path))
+    monkeypatch.setattr(settings, "PLATFORM_PUBLIC_KEY_PATH", str(missing_platform_public_key_path), raising=False)
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"WX_MCH_PRIVATE_KEY_PATH.*WX_PLATFORM_PUBLIC_KEY_PATH",
+    ):
+        settings.validate_payment_config(require_platform_public_key=True)
+
+
 def test_verify_pay_notify_rejects_stale_timestamp(payment_security_config):
     body = _build_encrypted_callback_body(
         settings.API_V3_KEY,

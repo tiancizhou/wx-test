@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 
 class WeChatSettings:
@@ -27,16 +28,23 @@ class WeChatSettings:
             ("WX_API_V3_KEY", self.API_V3_KEY),
         ]
         if require_platform_public_key:
-            required_fields.extend(
-                [
-                    ("WX_PLATFORM_SERIAL_NO", self.PLATFORM_SERIAL_NO),
-                    ("WX_PLATFORM_PUBLIC_KEY_PATH", self.PLATFORM_PUBLIC_KEY_PATH),
-                ]
-            )
+            required_fields.append(("WX_PLATFORM_PUBLIC_KEY_PATH", self.PLATFORM_PUBLIC_KEY_PATH))
 
         missing = [env_name for env_name, value in required_fields if not value]
         if missing:
             raise RuntimeError(f"微信支付正式环境缺少必要配置: {', '.join(missing)}")
+
+        missing_files = []
+        key_file_fields = [("WX_MCH_PRIVATE_KEY_PATH", self.MCH_PRIVATE_KEY_PATH)]
+        if require_platform_public_key:
+            key_file_fields.append(("WX_PLATFORM_PUBLIC_KEY_PATH", self.PLATFORM_PUBLIC_KEY_PATH))
+
+        for env_name, value in key_file_fields:
+            if value and not Path(value).is_file():
+                missing_files.append(env_name)
+
+        if missing_files:
+            raise RuntimeError(f"微信支付正式环境密钥文件不存在: {', '.join(missing_files)}")
 
 
 settings = WeChatSettings()
