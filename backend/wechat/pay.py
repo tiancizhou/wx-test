@@ -21,6 +21,8 @@ from .config import settings
 # ---------------------------------------------------------------------------
 
 _private_key = None
+_platform_public_key = None
+_CALLBACK_MAX_SKEW_SECONDS = 5 * 60
 
 
 def _load_private_key():
@@ -45,6 +47,60 @@ def _sign_rsa(message: str, key=None) -> str:
     return base64.b64encode(signature).decode("utf-8")
 
 
+def _load_platform_public_key():
+    """加载微信支付平台公钥（PEM），全局缓存"""
+    global _platform_public_key
+    if _platform_public_key is not None:
+        return _platform_public_key
+
+    settings.validate_payment_config(require_platform_public_key=True)
+    pem = Path(settings.PLATFORM_PUBLIC_KEY_PATH).read_text(encoding="utf-8")
+    _platform_public_key = RSA.import_key(pem)
+    return _platform_public_key
+
+
+def _is_callback_timestamp_fresh(timestamp: str, now: int | None = None) -> bool:
+    try:
+        callback_ts = int(timestamp)
+    except (TypeError, ValueError):
+        return False
+
+    if now is None:
+        now = int(time.time())
+    return abs(now - callback_ts) <= _CALLBACK_MAX_SKEW_SECONDS
+
+
+def _verify_callback_signature(
+    timestamp: str,
+    nonce: str,
+    body: str,
+    signature: str,
+    wechatpay_serial: str = "",
+) -> bool:
+    if settings.PAY_MOCK:
+        return True
+    if not _is_callback_timestamp_fresh(timestamp):
+        return False
+
+    try:
+        settings.validate_payment_config(require_platform_public_key=True)
+    except RuntimeError:
+        return False
+
+    if settings.PLATFORM_SERIAL_NO and wechatpay_serial and wechatpay_serial != settings.PLATFORM_SERIAL_NO:
+        return False
+
+    try:
+        public_key = _load_platform_public_key()
+        signature_bytes = base64.b64decode(signature)
+        message = f"{timestamp}\n{nonce}\n{body}\n"
+        digest = SHA256.new(message.encode("utf-8"))
+        pkcs1_15.new(public_key).verify(digest, signature_bytes)
+        return True
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # V3 请求签名 & Authorization 头
 # ---------------------------------------------------------------------------
@@ -54,6 +110,7 @@ def _make_v3_auth_header(method: str, url_path: str, body: str) -> str:
     生成 V3 Authorization 请求头
     格式: WECHATPAY2-SHA256-RSA2048 mchid="...",nonce_str="...",timestamp="...",serial_no="...",signature="..."
     """
+    settings.validate_payment_config()
     timestamp = str(int(time.time()))
     nonce_str = uuid.uuid4().hex[:32]
     sign_message = f"{method}\n{url_path}\n{timestamp}\n{nonce_str}\n{body}\n"
@@ -204,22 +261,16 @@ def _decrypt_resource(resource: dict) -> dict | None:
         return None
 
 
-def verify_pay_notify(
+def _verify_and_decrypt_notify(
     timestamp: str,
     nonce: str,
     body: str,
     signature: str,
     wechatpay_serial: str = "",
 ) -> dict | None:
-    """
-    验证 V3 支付回调通知并解密。
-    1. 解析外层 JSON
-    2. 解密 resource.ciphertext（AES-256-GCM，密钥为 APIv3Key）
-    3. 返回解密后的支付结果
+    if not _verify_callback_signature(timestamp, nonce, body, signature, wechatpay_serial):
+        return None
 
-    开发阶段：没有 APIv3Key 时跳过解密，直接返回原始数据。
-    生产环境：应先验签再解密。
-    """
     try:
         data = json.loads(body)
     except (json.JSONDecodeError, TypeError):
@@ -232,8 +283,18 @@ def verify_pay_notify(
             return {"event_type": data.get("event_type"), "resource": decrypted}
         return None
 
-    # 没有 ciphertext 时（非加密场景）直接返回
     return data
+
+
+def verify_pay_notify(
+    timestamp: str,
+    nonce: str,
+    body: str,
+    signature: str,
+    wechatpay_serial: str = "",
+) -> dict | None:
+    """验签并解密 V3 支付回调通知。"""
+    return _verify_and_decrypt_notify(timestamp, nonce, body, signature, wechatpay_serial)
 
 
 # ---------------------------------------------------------------------------
@@ -350,9 +411,20 @@ async def create_refund(
     return resp.json()
 
 
+def verify_refund_notify(
+    timestamp: str,
+    nonce: str,
+    body: str,
+    signature: str,
+    wechatpay_serial: str = "",
+) -> dict | None:
+    """验签并解密 V3 退款回调通知。"""
+    return _verify_and_decrypt_notify(timestamp, nonce, body, signature, wechatpay_serial)
+
+
 def decrypt_refund_notify(body: str) -> dict | None:
     """
-    解密退款回调通知（与支付回调使用相同的 AES-256-GCM 解密）
+    解密退款回调通知（兼容旧调用方；正式环境请改用 verify_refund_notify）
     返回: {event_type, resource: {out_trade_no, refund_status, ...}}
     """
     try:
