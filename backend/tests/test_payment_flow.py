@@ -1,8 +1,8 @@
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 import main as main_module
-from models import Order, OrderStatus
+from models import Good, Order, OrderStatus
 from wechat.config import settings
 
 
@@ -139,6 +139,136 @@ async def test_mock_confirm_rejects_repeated_confirm_for_non_unpaid_order(
 
     assert order.status == OrderStatus.ORDERED
     assert seeded_good.sales == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_payment_success_ignores_stale_duplicate_attempt(
+    seeded_session,
+    session_factory,
+    auth_headers,
+    client,
+    seeded_good,
+):
+    result = await _create_order(client, seeded_good, auth_headers, quantity=2)
+
+    async with session_factory() as stale_session:
+        stale_order = (
+            await stale_session.execute(select(Order).where(Order.id == result["order_id"]))
+        ).scalar_one()
+        assert stale_order.status == OrderStatus.UNPAID
+
+        first_applied = await main_module.apply_payment_success(
+            result["order_id"],
+            seeded_session,
+            transaction_id="txn-first",
+        )
+        second_applied = await main_module.apply_payment_success(
+            result["order_id"],
+            stale_session,
+            transaction_id="txn-stale",
+        )
+
+    order = (
+        await seeded_session.execute(select(Order).where(Order.id == result["order_id"]))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert first_applied is True
+    assert second_applied is False
+    assert order.status == OrderStatus.ORDERED
+    assert order.transaction_id == "txn-first"
+    assert seeded_good.sales == 2
+
+
+@pytest.mark.asyncio
+async def test_apply_refund_success_ignores_stale_duplicate_attempt(
+    seeded_session,
+    session_factory,
+    auth_headers,
+    client,
+    seeded_good,
+):
+    result = await _create_order(client, seeded_good, auth_headers, quantity=2)
+    await main_module.apply_payment_success(
+        result["order_id"],
+        seeded_session,
+        transaction_id="txn-refund",
+    )
+
+    async with session_factory() as stale_session:
+        stale_order = (
+            await stale_session.execute(select(Order).where(Order.id == result["order_id"]))
+        ).scalar_one()
+        assert stale_order.status == OrderStatus.ORDERED
+
+        first_applied = await main_module.apply_refund_success(
+            result["order_id"],
+            seeded_session,
+            refund_id="refund-first",
+        )
+        second_applied = await main_module.apply_refund_success(
+            result["order_id"],
+            stale_session,
+            refund_id="refund-stale",
+        )
+
+    order = (
+        await seeded_session.execute(select(Order).where(Order.id == result["order_id"]))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert first_applied is True
+    assert second_applied is False
+    assert order.status == OrderStatus.REFUNDED
+    assert order.refund_id == "refund-first"
+    assert seeded_good.sales == 0
+
+
+@pytest.mark.asyncio
+async def test_apply_refund_success_uses_current_db_sales_value(
+    seeded_session,
+    session_factory,
+    auth_headers,
+    client,
+    seeded_good,
+):
+    result = await _create_order(client, seeded_good, auth_headers, quantity=3)
+    await main_module.apply_payment_success(
+        result["order_id"],
+        seeded_session,
+        transaction_id="txn-clamp",
+    )
+
+    async with session_factory() as stale_session:
+        stale_order = (
+            await stale_session.execute(select(Order).where(Order.id == result["order_id"]))
+        ).scalar_one()
+        await stale_session.refresh(stale_order, ["good"])
+        assert stale_order.good.sales == 3
+
+        await seeded_session.execute(
+            update(Good)
+            .where(Good.id == seeded_good.id)
+            .values(sales=5)
+            .execution_options(synchronize_session=False)
+        )
+        await seeded_session.commit()
+
+        applied = await main_module.apply_refund_success(
+            result["order_id"],
+            stale_session,
+            refund_id="refund-db-state",
+        )
+
+    order = (
+        await seeded_session.execute(select(Order).where(Order.id == result["order_id"]))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert applied is True
+    assert order.status == OrderStatus.REFUNDED
+    assert order.refund_id == "refund-db-state"
+    assert seeded_good.sales == 2
 
 
 @pytest.mark.asyncio

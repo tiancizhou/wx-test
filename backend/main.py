@@ -12,7 +12,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select, func, update
+from sqlalchemy import case, select, func, update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -358,16 +358,27 @@ async def apply_payment_success(
     transaction_id: str = "",
 ):
     order = await _load_order_for_payment_update(order_id, db)
-    if order.status != OrderStatus.UNPAID:
+    qty = order.quantity or 1
+
+    payment_update = await db.execute(
+        update(Order)
+        .where(Order.id == order_id, Order.status == OrderStatus.UNPAID)
+        .values(
+            status=OrderStatus.ORDERED,
+            transaction_id=transaction_id if transaction_id else Order.transaction_id,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if payment_update.rowcount == 0:
+        await db.rollback()
         return False
 
-    order.status = OrderStatus.ORDERED
-    if transaction_id:
-        order.transaction_id = transaction_id
-    if order.good:
-        await db.execute(
-            update(Good).where(Good.id == order.good_id).values(sales=Good.sales + (order.quantity or 1))
-        )
+    await db.execute(
+        update(Good)
+        .where(Good.id == order.good_id)
+        .values(sales=Good.sales + qty)
+        .execution_options(synchronize_session=False)
+    )
     await db.commit()
     return True
 
@@ -383,15 +394,34 @@ async def apply_refund_success(
     if order.status not in (OrderStatus.ORDERED, OrderStatus.COMPLETED, OrderStatus.REFUNDING):
         raise ValueError("订单状态不支持退款成功")
 
-    order.status = OrderStatus.REFUNDED
-    if refund_id:
-        order.refund_id = refund_id
-    if order.good:
-        qty = order.quantity or 1
-        new_sales = max(0, order.good.sales - qty)
-        await db.execute(
-            update(Good).where(Good.id == order.good_id).values(sales=new_sales)
+    qty = order.quantity or 1
+    refund_update = await db.execute(
+        update(Order)
+        .where(
+            Order.id == order_id,
+            Order.status.in_((OrderStatus.ORDERED, OrderStatus.COMPLETED, OrderStatus.REFUNDING)),
         )
+        .values(
+            status=OrderStatus.REFUNDED,
+            refund_id=refund_id if refund_id else Order.refund_id,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if refund_update.rowcount == 0:
+        await db.rollback()
+        return False
+
+    await db.execute(
+        update(Good)
+        .where(Good.id == order.good_id)
+        .values(
+            sales=case(
+                (Good.sales > qty, Good.sales - qty),
+                else_=0,
+            )
+        )
+        .execution_options(synchronize_session=False)
+    )
     await db.commit()
     return True
 
