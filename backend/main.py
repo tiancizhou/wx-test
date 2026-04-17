@@ -12,7 +12,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select, func, update
+from sqlalchemy import case, select, func, update
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,6 +85,7 @@ async def _cleanup_stale_unpaid_orders():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_payment_config(require_platform_public_key=True)
     await init_db()
     task = asyncio.create_task(_cleanup_stale_unpaid_orders())
     yield
@@ -339,7 +340,101 @@ async def _verify_order_access(order_id: str, user: User, db: AsyncSession) -> O
 # 支付
 # ============================================================
 
-from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify, query_order, create_refund, decrypt_refund_notify, close_order
+from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify, query_order, create_refund, verify_refund_notify, close_order
+
+
+async def _load_order_for_payment_update(order_id: str, db: AsyncSession) -> Order:
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.good))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise LookupError("订单不存在")
+    return order
+
+
+async def apply_payment_success(
+    order_id: str,
+    db: AsyncSession,
+    transaction_id: str = "",
+    amount_total: int | None = None,
+    appid: str = "",
+    mchid: str = "",
+):
+    order = await _load_order_for_payment_update(order_id, db)
+    if amount_total is not None and amount_total != order.total_fee:
+        raise ValueError("支付回调金额不匹配")
+    if appid and appid != settings.APP_ID:
+        raise ValueError("支付回调 appid 不匹配")
+    if mchid and mchid != settings.MCH_ID:
+        raise ValueError("支付回调 mchid 不匹配")
+
+    qty = order.quantity or 1
+
+    payment_update = await db.execute(
+        update(Order)
+        .where(Order.id == order_id, Order.status == OrderStatus.UNPAID)
+        .values(
+            status=OrderStatus.ORDERED,
+            transaction_id=transaction_id if transaction_id else Order.transaction_id,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if payment_update.rowcount == 0:
+        await db.rollback()
+        return False
+
+    await db.execute(
+        update(Good)
+        .where(Good.id == order.good_id)
+        .values(sales=Good.sales + qty)
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
+    return True
+
+
+async def apply_refund_success(
+    order_id: str,
+    db: AsyncSession,
+    refund_id: str = "",
+):
+    order = await _load_order_for_payment_update(order_id, db)
+    if order.status == OrderStatus.REFUNDED:
+        return False
+    if order.status not in (OrderStatus.ORDERED, OrderStatus.COMPLETED, OrderStatus.REFUNDING):
+        raise ValueError("订单状态不支持退款成功")
+
+    qty = order.quantity or 1
+    refund_update = await db.execute(
+        update(Order)
+        .where(
+            Order.id == order_id,
+            Order.status.in_((OrderStatus.ORDERED, OrderStatus.COMPLETED, OrderStatus.REFUNDING)),
+        )
+        .values(
+            status=OrderStatus.REFUNDED,
+            refund_id=refund_id if refund_id else Order.refund_id,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if refund_update.rowcount == 0:
+        await db.rollback()
+        return False
+
+    await db.execute(
+        update(Good)
+        .where(Good.id == order.good_id)
+        .values(
+            sales=case(
+                (Good.sales > qty, Good.sales - qty),
+                else_=0,
+            )
+        )
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
+    return True
 
 
 @app.post("/pay/create")
@@ -378,12 +473,9 @@ async def pay_create(
     await db.commit()
     await db.refresh(order)
 
-    # Mock 模式：直接标记为已支付
+    # Mock 模式：保留未支付状态，等待显式确认
     if settings.PAY_MOCK:
-        order.status = OrderStatus.ORDERED
-        await db.execute(update(Good).where(Good.id == good.id).values(sales=Good.sales + qty))
-        await db.commit()
-        return {"mock": True, "order_id": order.id, "status": "PAID"}
+        return {"mock": True, "order_id": order.id, "status": "NOTPAY"}
 
     # 真实模式：调微信统一下单
     try:
@@ -409,27 +501,62 @@ async def pay_create(
 @app.post("/pay/notify")
 async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
     """微信支付 V3 支付成功回调通知"""
-    body = (await request.body()).decode("utf-8")
+    try:
+        body = (await request.body()).decode("utf-8")
+    except UnicodeDecodeError:
+        return JSONResponse({"code": "FAIL", "message": "支付回调请求体不是有效 UTF-8"}, status_code=400)
     timestamp = request.headers.get("Wechatpay-Timestamp", "")
     nonce = request.headers.get("Wechatpay-Nonce", "")
     signature = request.headers.get("Wechatpay-Signature", "")
+    wechatpay_serial = request.headers.get("Wechatpay-Serial", "")
 
-    data = verify_pay_notify(timestamp, nonce, body, signature)
+    data = verify_pay_notify(timestamp, nonce, body, signature, wechatpay_serial=wechatpay_serial)
     if not data:
-        return JSONResponse({"code": "FAIL", "message": "解密失败"}, status_code=400)
+        return JSONResponse({"code": "FAIL", "message": "验签或解密失败"}, status_code=400)
+    if not isinstance(data, dict):
+        return JSONResponse({"code": "FAIL", "message": "支付回调数据格式无效"}, status_code=400)
+
+    resource = data.get("resource")
+    if not isinstance(resource, dict):
+        return JSONResponse({"code": "FAIL", "message": "支付回调资源格式无效"}, status_code=400)
 
     if data.get("event_type") != "TRANSACTION.SUCCESS":
         return Response(status_code=200)
-
-    resource = data.get("resource", {})
     if resource.get("trade_state") != "SUCCESS":
         return Response(status_code=200)
 
+    amount = resource.get("amount")
+    if not isinstance(amount, dict):
+        return JSONResponse({"code": "FAIL", "message": "支付回调金额格式无效"}, status_code=400)
+
+    amount_total = amount.get("total")
+    if amount_total is None or isinstance(amount_total, bool):
+        return JSONResponse({"code": "FAIL", "message": "支付回调金额格式无效"}, status_code=400)
+    if isinstance(amount_total, str):
+        amount_total = amount_total.strip()
+    try:
+        if isinstance(amount_total, float) and not amount_total.is_integer():
+            raise ValueError
+        amount_total = int(amount_total)
+    except (TypeError, ValueError):
+        return JSONResponse({"code": "FAIL", "message": "支付回调金额格式无效"}, status_code=400)
+
+    appid = resource.get("appid")
+    if not isinstance(appid, str) or not appid.strip():
+        return JSONResponse({"code": "FAIL", "message": "缺少 appid"}, status_code=400)
+
+    mchid = resource.get("mchid")
+    if not isinstance(mchid, str) or not mchid.strip():
+        return JSONResponse({"code": "FAIL", "message": "缺少 mchid"}, status_code=400)
+
     order_id = resource.get("out_trade_no", "")
-    if not order_id:
+    if not isinstance(order_id, str) or not order_id.strip():
         return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
 
-    # 幂等：重复回调直接返回成功
+    transaction_id = resource.get("transaction_id", "")
+    if "transaction_id" in resource and not isinstance(transaction_id, str):
+        return JSONResponse({"code": "FAIL", "message": "支付回调 transaction_id 格式无效"}, status_code=400)
+
     result = await db.execute(
         select(Order).where(Order.id == order_id).options(selectinload(Order.good))
     )
@@ -437,17 +564,36 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
     if not order:
         return JSONResponse({"code": "FAIL", "message": "订单不存在"}, status_code=404)
 
-    if order.status == OrderStatus.UNPAID:
-        order.status = OrderStatus.ORDERED
-        order.transaction_id = resource.get("transaction_id", "")
-        if order.good:
-            await db.execute(
-                update(Good).where(Good.id == order.good_id).values(sales=Good.sales + (order.quantity or 1))
-            )
-        await db.commit()
+    try:
+        await apply_payment_success(
+            order.id,
+            db,
+            transaction_id=resource.get("transaction_id", ""),
+            amount_total=amount_total,
+            appid=appid,
+            mchid=mchid,
+        )
+    except ValueError as e:
+        return JSONResponse({"code": "FAIL", "message": str(e)}, status_code=400)
 
-    # 成功：200 无 body
     return Response(status_code=200)
+
+
+@app.post("/pay/mock/confirm/{order_id}")
+async def pay_mock_confirm(
+    order_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not settings.PAY_MOCK:
+        raise HTTPException(404, "仅 mock 模式可用")
+
+    order = await _verify_order_access(order_id, user, db)
+    if order.status != OrderStatus.UNPAID:
+        raise HTTPException(400, "订单状态不允许确认支付")
+
+    await apply_payment_success(order.id, db, transaction_id=f"mock-{order.id}")
+    return {"mock": True, "order_id": order.id, "status": "SUCCESS"}
 
 
 @app.post("/pay/query/{order_id}")
@@ -457,9 +603,10 @@ async def pay_query(
     user: User = Depends(get_current_user),
 ):
     """查询订单支付状态（调微信 V3 查单 API）"""
-    await _verify_order_access(order_id, user, db)
+    order = await _verify_order_access(order_id, user, db)
     if settings.PAY_MOCK:
-        return {"mock": True, "trade_state": "SUCCESS"}
+        trade_state = "SUCCESS" if order.status != OrderStatus.UNPAID else "NOTPAY"
+        return {"mock": True, "trade_state": trade_state}
     try:
         result = await query_order(order_id)
         return {"mock": False, **result}
@@ -506,8 +653,7 @@ async def pay_refund(
     reason = body.get("reason", "商户退款")
 
     if settings.PAY_MOCK:
-        order.status = OrderStatus.REFUNDING
-        await db.commit()
+        await apply_refund_success(order.id, db, refund_id=f"mock-refund-{order.id}")
         return {"mock": True, "status": "SUCCESS"}
 
     out_refund_no = f"R{order_id}"
@@ -533,35 +679,50 @@ async def pay_refund(
 @app.post("/refund/notify")
 async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
     """退款结果回调通知"""
-    body = (await request.body()).decode("utf-8")
-    data = decrypt_refund_notify(body)
-    if not data:
-        return JSONResponse({"code": "FAIL", "message": "解密失败"}, status_code=400)
+    try:
+        body = (await request.body()).decode("utf-8")
+    except UnicodeDecodeError:
+        return JSONResponse({"code": "FAIL", "message": "退款回调请求体不是有效 UTF-8"}, status_code=400)
+    timestamp = request.headers.get("Wechatpay-Timestamp", "")
+    nonce = request.headers.get("Wechatpay-Nonce", "")
+    signature = request.headers.get("Wechatpay-Signature", "")
+    wechatpay_serial = request.headers.get("Wechatpay-Serial", "")
 
-    resource = data.get("resource", {})
+    data = verify_refund_notify(timestamp, nonce, body, signature, wechatpay_serial=wechatpay_serial)
+    if not data:
+        return JSONResponse({"code": "FAIL", "message": "验签或解密失败"}, status_code=400)
+    if not isinstance(data, dict):
+        return JSONResponse({"code": "FAIL", "message": "退款回调数据格式无效"}, status_code=400)
+
+    resource = data.get("resource")
+    if not isinstance(resource, dict):
+        return JSONResponse({"code": "FAIL", "message": "退款回调资源格式无效"}, status_code=400)
+
     refund_status = resource.get("refund_status", "")
 
     if refund_status == "SUCCESS":
         order_id = resource.get("out_trade_no", "")
-        if not order_id:
+        if not isinstance(order_id, str) or not order_id.strip():
             return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
+
+        refund_id = resource.get("refund_id", "")
+        if "refund_id" in resource and not isinstance(refund_id, str):
+            return JSONResponse({"code": "FAIL", "message": "退款回调 refund_id 格式无效"}, status_code=400)
 
         result = await db.execute(
             select(Order).where(Order.id == order_id).options(selectinload(Order.good))
         )
         order = result.scalar_one_or_none()
-        if order and order.status != OrderStatus.REFUNDED:
-            order.status = OrderStatus.REFUNDED
-            order.refund_id = resource.get("refund_id", order.refund_id)
-            if order.good:
-                qty = order.quantity or 1
-                new_sales = max(0, order.good.sales - qty)
-                await db.execute(
-                    update(Good).where(Good.id == order.good_id).values(sales=new_sales)
+        if order:
+            try:
+                await apply_refund_success(
+                    order.id,
+                    db,
+                    refund_id=refund_id or order.refund_id,
                 )
-            await db.commit()
+            except ValueError as e:
+                return JSONResponse({"code": "FAIL", "message": str(e)}, status_code=400)
 
-    # 成功：200 无 body
     return Response(status_code=200)
 
 
