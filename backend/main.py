@@ -85,6 +85,7 @@ async def _cleanup_stale_unpaid_orders():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_payment_config(require_platform_public_key=True)
     await init_db()
     task = asyncio.create_task(_cleanup_stale_unpaid_orders())
     yield
@@ -339,7 +340,7 @@ async def _verify_order_access(order_id: str, user: User, db: AsyncSession) -> O
 # 支付
 # ============================================================
 
-from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify, query_order, create_refund, decrypt_refund_notify, close_order
+from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify, query_order, create_refund, verify_refund_notify, close_order
 
 
 async def _load_order_for_payment_update(order_id: str, db: AsyncSession) -> Order:
@@ -356,8 +357,18 @@ async def apply_payment_success(
     order_id: str,
     db: AsyncSession,
     transaction_id: str = "",
+    amount_total: int | None = None,
+    appid: str = "",
+    mchid: str = "",
 ):
     order = await _load_order_for_payment_update(order_id, db)
+    if amount_total is not None and amount_total != order.total_fee:
+        raise ValueError("支付回调金额不匹配")
+    if appid and appid != settings.APP_ID:
+        raise ValueError("支付回调 appid 不匹配")
+    if mchid and mchid != settings.MCH_ID:
+        raise ValueError("支付回调 mchid 不匹配")
+
     qty = order.quantity or 1
 
     payment_update = await db.execute(
@@ -494,10 +505,11 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
     timestamp = request.headers.get("Wechatpay-Timestamp", "")
     nonce = request.headers.get("Wechatpay-Nonce", "")
     signature = request.headers.get("Wechatpay-Signature", "")
+    wechatpay_serial = request.headers.get("Wechatpay-Serial", "")
 
-    data = verify_pay_notify(timestamp, nonce, body, signature)
+    data = verify_pay_notify(timestamp, nonce, body, signature, wechatpay_serial=wechatpay_serial)
     if not data:
-        return JSONResponse({"code": "FAIL", "message": "解密失败"}, status_code=400)
+        return JSONResponse({"code": "FAIL", "message": "验签或解密失败"}, status_code=400)
 
     if data.get("event_type") != "TRANSACTION.SUCCESS":
         return Response(status_code=200)
@@ -510,7 +522,6 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
     if not order_id:
         return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
 
-    # 幂等：重复回调直接返回成功
     result = await db.execute(
         select(Order).where(Order.id == order_id).options(selectinload(Order.good))
     )
@@ -522,9 +533,11 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
         order.id,
         db,
         transaction_id=resource.get("transaction_id", ""),
+        amount_total=resource.get("amount", {}).get("total"),
+        appid=resource.get("appid", ""),
+        mchid=resource.get("mchid", ""),
     )
 
-    # 成功：200 无 body
     return Response(status_code=200)
 
 
@@ -629,9 +642,14 @@ async def pay_refund(
 async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
     """退款结果回调通知"""
     body = (await request.body()).decode("utf-8")
-    data = decrypt_refund_notify(body)
+    timestamp = request.headers.get("Wechatpay-Timestamp", "")
+    nonce = request.headers.get("Wechatpay-Nonce", "")
+    signature = request.headers.get("Wechatpay-Signature", "")
+    wechatpay_serial = request.headers.get("Wechatpay-Serial", "")
+
+    data = verify_refund_notify(timestamp, nonce, body, signature, wechatpay_serial=wechatpay_serial)
     if not data:
-        return JSONResponse({"code": "FAIL", "message": "解密失败"}, status_code=400)
+        return JSONResponse({"code": "FAIL", "message": "验签或解密失败"}, status_code=400)
 
     resource = data.get("resource", {})
     refund_status = resource.get("refund_status", "")
@@ -652,7 +670,6 @@ async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
                 refund_id=resource.get("refund_id", order.refund_id),
             )
 
-    # 成功：200 无 body
     return Response(status_code=200)
 
 
