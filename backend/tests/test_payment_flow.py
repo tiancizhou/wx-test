@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy import select
 
+import main as main_module
 from models import Order, OrderStatus
 from wechat.config import settings
 
@@ -112,6 +113,58 @@ async def test_mock_query_returns_success_after_mock_confirm(
 
     assert response.status_code == 200
     assert response.json() == {"mock": True, "trade_state": "SUCCESS"}
+
+
+@pytest.mark.asyncio
+async def test_mock_confirm_rejects_repeated_confirm_for_non_unpaid_order(
+    client,
+    seeded_session,
+    auth_headers,
+    seeded_good,
+):
+    result = await _create_order(client, seeded_good, auth_headers)
+
+    first_response = await client.post(f"/pay/mock/confirm/{result['order_id']}", headers=auth_headers)
+    assert first_response.status_code == 200
+
+    response = await client.post(f"/pay/mock/confirm/{result['order_id']}", headers=auth_headers)
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "订单状态不允许确认支付"}
+
+    order = (
+        await seeded_session.execute(select(Order).where(Order.id == result["order_id"]))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert order.status == OrderStatus.ORDERED
+    assert seeded_good.sales == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_refund_success_rejects_invalid_unpaid_transition(
+    seeded_session,
+    auth_headers,
+    client,
+    seeded_good,
+):
+    result = await _create_order(client, seeded_good, auth_headers)
+
+    with pytest.raises(ValueError, match="订单状态不支持退款成功"):
+        await main_module.apply_refund_success(
+            result["order_id"],
+            seeded_session,
+            refund_id="mock-refund-invalid",
+        )
+
+    order = (
+        await seeded_session.execute(select(Order).where(Order.id == result["order_id"]))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert order.status == OrderStatus.UNPAID
+    assert order.refund_id == ""
+    assert seeded_good.sales == 0
 
 
 @pytest.mark.asyncio

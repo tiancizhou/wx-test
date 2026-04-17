@@ -342,11 +342,22 @@ async def _verify_order_access(order_id: str, user: User, db: AsyncSession) -> O
 from wechat.pay import create_prepay_order, generate_jsapi_params, verify_pay_notify, query_order, create_refund, decrypt_refund_notify, close_order
 
 
+async def _load_order_for_payment_update(order_id: str, db: AsyncSession) -> Order:
+    result = await db.execute(
+        select(Order).where(Order.id == order_id).options(selectinload(Order.good))
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise LookupError("订单不存在")
+    return order
+
+
 async def apply_payment_success(
-    order: Order,
+    order_id: str,
     db: AsyncSession,
     transaction_id: str = "",
 ):
+    order = await _load_order_for_payment_update(order_id, db)
     if order.status != OrderStatus.UNPAID:
         return False
 
@@ -362,12 +373,15 @@ async def apply_payment_success(
 
 
 async def apply_refund_success(
-    order: Order,
+    order_id: str,
     db: AsyncSession,
     refund_id: str = "",
 ):
+    order = await _load_order_for_payment_update(order_id, db)
     if order.status == OrderStatus.REFUNDED:
         return False
+    if order.status not in (OrderStatus.ORDERED, OrderStatus.COMPLETED, OrderStatus.REFUNDING):
+        raise ValueError("订单状态不支持退款成功")
 
     order.status = OrderStatus.REFUNDED
     if refund_id:
@@ -475,7 +489,7 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
         return JSONResponse({"code": "FAIL", "message": "订单不存在"}, status_code=404)
 
     await apply_payment_success(
-        order,
+        order.id,
         db,
         transaction_id=resource.get("transaction_id", ""),
     )
@@ -494,7 +508,10 @@ async def pay_mock_confirm(
         raise HTTPException(404, "仅 mock 模式可用")
 
     order = await _verify_order_access(order_id, user, db)
-    await apply_payment_success(order, db, transaction_id=f"mock-{order.id}")
+    if order.status != OrderStatus.UNPAID:
+        raise HTTPException(400, "订单状态不允许确认支付")
+
+    await apply_payment_success(order.id, db, transaction_id=f"mock-{order.id}")
     return {"mock": True, "order_id": order.id, "status": "SUCCESS"}
 
 
@@ -555,7 +572,7 @@ async def pay_refund(
     reason = body.get("reason", "商户退款")
 
     if settings.PAY_MOCK:
-        await apply_refund_success(order, db, refund_id=f"mock-refund-{order.id}")
+        await apply_refund_success(order.id, db, refund_id=f"mock-refund-{order.id}")
         return {"mock": True, "status": "SUCCESS"}
 
     out_refund_no = f"R{order_id}"
@@ -600,7 +617,7 @@ async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
         order = result.scalar_one_or_none()
         if order:
             await apply_refund_success(
-                order,
+                order.id,
                 db,
                 refund_id=resource.get("refund_id", order.refund_id),
             )
