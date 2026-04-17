@@ -501,7 +501,10 @@ async def pay_create(
 @app.post("/pay/notify")
 async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
     """微信支付 V3 支付成功回调通知"""
-    body = (await request.body()).decode("utf-8")
+    try:
+        body = (await request.body()).decode("utf-8")
+    except UnicodeDecodeError:
+        return JSONResponse({"code": "FAIL", "message": "支付回调请求体不是有效 UTF-8"}, status_code=400)
     timestamp = request.headers.get("Wechatpay-Timestamp", "")
     nonce = request.headers.get("Wechatpay-Nonce", "")
     signature = request.headers.get("Wechatpay-Signature", "")
@@ -510,17 +513,49 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
     data = verify_pay_notify(timestamp, nonce, body, signature, wechatpay_serial=wechatpay_serial)
     if not data:
         return JSONResponse({"code": "FAIL", "message": "验签或解密失败"}, status_code=400)
+    if not isinstance(data, dict):
+        return JSONResponse({"code": "FAIL", "message": "支付回调数据格式无效"}, status_code=400)
+
+    resource = data.get("resource")
+    if not isinstance(resource, dict):
+        return JSONResponse({"code": "FAIL", "message": "支付回调资源格式无效"}, status_code=400)
 
     if data.get("event_type") != "TRANSACTION.SUCCESS":
         return Response(status_code=200)
-
-    resource = data.get("resource", {})
     if resource.get("trade_state") != "SUCCESS":
         return Response(status_code=200)
 
+    amount = resource.get("amount")
+    if not isinstance(amount, dict):
+        return JSONResponse({"code": "FAIL", "message": "支付回调金额格式无效"}, status_code=400)
+
+    amount_total = amount.get("total")
+    if amount_total is None or isinstance(amount_total, bool):
+        return JSONResponse({"code": "FAIL", "message": "支付回调金额格式无效"}, status_code=400)
+    if isinstance(amount_total, str):
+        amount_total = amount_total.strip()
+    try:
+        if isinstance(amount_total, float) and not amount_total.is_integer():
+            raise ValueError
+        amount_total = int(amount_total)
+    except (TypeError, ValueError):
+        return JSONResponse({"code": "FAIL", "message": "支付回调金额格式无效"}, status_code=400)
+
+    appid = resource.get("appid")
+    if not isinstance(appid, str) or not appid.strip():
+        return JSONResponse({"code": "FAIL", "message": "缺少 appid"}, status_code=400)
+
+    mchid = resource.get("mchid")
+    if not isinstance(mchid, str) or not mchid.strip():
+        return JSONResponse({"code": "FAIL", "message": "缺少 mchid"}, status_code=400)
+
     order_id = resource.get("out_trade_no", "")
-    if not order_id:
+    if not isinstance(order_id, str) or not order_id.strip():
         return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
+
+    transaction_id = resource.get("transaction_id", "")
+    if "transaction_id" in resource and not isinstance(transaction_id, str):
+        return JSONResponse({"code": "FAIL", "message": "支付回调 transaction_id 格式无效"}, status_code=400)
 
     result = await db.execute(
         select(Order).where(Order.id == order_id).options(selectinload(Order.good))
@@ -529,14 +564,17 @@ async def pay_notify(request: Request, db: AsyncSession = Depends(get_db)):
     if not order:
         return JSONResponse({"code": "FAIL", "message": "订单不存在"}, status_code=404)
 
-    await apply_payment_success(
-        order.id,
-        db,
-        transaction_id=resource.get("transaction_id", ""),
-        amount_total=resource.get("amount", {}).get("total"),
-        appid=resource.get("appid", ""),
-        mchid=resource.get("mchid", ""),
-    )
+    try:
+        await apply_payment_success(
+            order.id,
+            db,
+            transaction_id=resource.get("transaction_id", ""),
+            amount_total=amount_total,
+            appid=appid,
+            mchid=mchid,
+        )
+    except ValueError as e:
+        return JSONResponse({"code": "FAIL", "message": str(e)}, status_code=400)
 
     return Response(status_code=200)
 
@@ -641,7 +679,10 @@ async def pay_refund(
 @app.post("/refund/notify")
 async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
     """退款结果回调通知"""
-    body = (await request.body()).decode("utf-8")
+    try:
+        body = (await request.body()).decode("utf-8")
+    except UnicodeDecodeError:
+        return JSONResponse({"code": "FAIL", "message": "退款回调请求体不是有效 UTF-8"}, status_code=400)
     timestamp = request.headers.get("Wechatpay-Timestamp", "")
     nonce = request.headers.get("Wechatpay-Nonce", "")
     signature = request.headers.get("Wechatpay-Signature", "")
@@ -650,25 +691,37 @@ async def refund_notify(request: Request, db: AsyncSession = Depends(get_db)):
     data = verify_refund_notify(timestamp, nonce, body, signature, wechatpay_serial=wechatpay_serial)
     if not data:
         return JSONResponse({"code": "FAIL", "message": "验签或解密失败"}, status_code=400)
+    if not isinstance(data, dict):
+        return JSONResponse({"code": "FAIL", "message": "退款回调数据格式无效"}, status_code=400)
 
-    resource = data.get("resource", {})
+    resource = data.get("resource")
+    if not isinstance(resource, dict):
+        return JSONResponse({"code": "FAIL", "message": "退款回调资源格式无效"}, status_code=400)
+
     refund_status = resource.get("refund_status", "")
 
     if refund_status == "SUCCESS":
         order_id = resource.get("out_trade_no", "")
-        if not order_id:
+        if not isinstance(order_id, str) or not order_id.strip():
             return JSONResponse({"code": "FAIL", "message": "缺少订单号"}, status_code=400)
+
+        refund_id = resource.get("refund_id", "")
+        if "refund_id" in resource and not isinstance(refund_id, str):
+            return JSONResponse({"code": "FAIL", "message": "退款回调 refund_id 格式无效"}, status_code=400)
 
         result = await db.execute(
             select(Order).where(Order.id == order_id).options(selectinload(Order.good))
         )
         order = result.scalar_one_or_none()
         if order:
-            await apply_refund_success(
-                order.id,
-                db,
-                refund_id=resource.get("refund_id", order.refund_id),
-            )
+            try:
+                await apply_refund_success(
+                    order.id,
+                    db,
+                    refund_id=refund_id or order.refund_id,
+                )
+            except ValueError as e:
+                return JSONResponse({"code": "FAIL", "message": str(e)}, status_code=400)
 
     return Response(status_code=200)
 

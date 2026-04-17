@@ -7,6 +7,7 @@ from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 import main as main_module
@@ -205,6 +206,20 @@ async def test_pay_notify_is_idempotent(
 
 
 @pytest.mark.asyncio
+async def test_pay_notify_returns_400_for_non_utf8_request_body(app):
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        response = await test_client.post(
+            "/pay/notify",
+            content=b"\xff\xfe\xfd",
+            headers={"Content-Type": "application/octet-stream"},
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"code": "FAIL", "message": "支付回调请求体不是有效 UTF-8"}
+
+
+@pytest.mark.asyncio
 async def test_pay_notify_returns_400_when_wechatpay_serial_verification_fails(
     client,
     seeded_session,
@@ -241,6 +256,142 @@ async def test_pay_notify_returns_400_when_wechatpay_serial_verification_fails(
     assert response.status_code == 400
     assert response.json()["code"] == "FAIL"
     assert persisted_order.status == OrderStatus.UNPAID
+    assert seeded_good.sales == 0
+
+
+@pytest.mark.asyncio
+async def test_pay_notify_returns_400_and_leaves_order_unchanged_when_verified_fields_mismatch(
+    client,
+    seeded_session,
+    customer_user,
+    seeded_good,
+    payment_security_config,
+):
+    order = await _create_unpaid_order(seeded_session, customer_user, seeded_good)
+    body = _build_encrypted_callback_body(
+        settings.API_V3_KEY,
+        {
+            "out_trade_no": order.id,
+            "trade_state": "SUCCESS",
+            "transaction_id": "4200000000000000004",
+            "appid": settings.APP_ID,
+            "mchid": settings.MCH_ID,
+            "amount": {"total": order.total_fee - 1},
+        },
+        event_type="TRANSACTION.SUCCESS",
+    )
+    headers = _build_callback_headers(
+        payment_security_config["platform_private_key"],
+        payment_security_config["platform_serial"],
+        body,
+    )
+
+    response = await client.post("/pay/notify", content=body, headers=headers)
+
+    persisted_order = (
+        await seeded_session.execute(select(Order).where(Order.id == order.id))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert response.status_code == 400
+    assert response.json() == {"code": "FAIL", "message": "支付回调金额不匹配"}
+    assert persisted_order.status == OrderStatus.UNPAID
+    assert persisted_order.transaction_id == ""
+    assert seeded_good.sales == 0
+
+
+@pytest.mark.asyncio
+async def test_pay_notify_returns_400_when_verified_amount_structure_is_malformed(
+    client,
+    seeded_session,
+    customer_user,
+    seeded_good,
+    payment_security_config,
+):
+    order = await _create_unpaid_order(seeded_session, customer_user, seeded_good)
+    body = _build_encrypted_callback_body(
+        settings.API_V3_KEY,
+        {
+            "out_trade_no": order.id,
+            "trade_state": "SUCCESS",
+            "transaction_id": "4200000000000000005",
+            "appid": settings.APP_ID,
+            "mchid": settings.MCH_ID,
+            "amount": "not-a-dict",
+        },
+        event_type="TRANSACTION.SUCCESS",
+    )
+    headers = _build_callback_headers(
+        payment_security_config["platform_private_key"],
+        payment_security_config["platform_serial"],
+        body,
+    )
+
+    response = await client.post("/pay/notify", content=body, headers=headers)
+
+    persisted_order = (
+        await seeded_session.execute(select(Order).where(Order.id == order.id))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert response.status_code == 400
+    assert response.json() == {"code": "FAIL", "message": "支付回调金额格式无效"}
+    assert persisted_order.status == OrderStatus.UNPAID
+    assert persisted_order.transaction_id == ""
+    assert seeded_good.sales == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("resource_overrides", "expected_message"),
+    [
+        ({"out_trade_no": {"unexpected": "value"}}, "缺少订单号"),
+        ({"transaction_id": {"unexpected": "value"}}, "支付回调 transaction_id 格式无效"),
+    ],
+)
+async def test_pay_notify_returns_400_and_leaves_order_unchanged_when_verified_typed_fields_are_malformed(
+    app,
+    seeded_session,
+    customer_user,
+    seeded_good,
+    payment_security_config,
+    resource_overrides,
+    expected_message,
+):
+    order = await _create_unpaid_order(seeded_session, customer_user, seeded_good)
+    resource = {
+        "out_trade_no": order.id,
+        "trade_state": "SUCCESS",
+        "transaction_id": "4200000000000000006",
+        "appid": settings.APP_ID,
+        "mchid": settings.MCH_ID,
+        "amount": {"total": order.total_fee},
+    }
+    resource.update(resource_overrides)
+    body = _build_encrypted_callback_body(
+        settings.API_V3_KEY,
+        resource,
+        event_type="TRANSACTION.SUCCESS",
+    )
+    headers = _build_callback_headers(
+        payment_security_config["platform_private_key"],
+        payment_security_config["platform_serial"],
+        body,
+    )
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        response = await test_client.post("/pay/notify", content=body, headers=headers)
+
+    persisted_order = (
+        await seeded_session.execute(select(Order).where(Order.id == order.id))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert response.status_code == 400
+    assert response.json() == {"code": "FAIL", "message": expected_message}
+    assert persisted_order.status == OrderStatus.UNPAID
+    assert persisted_order.transaction_id == ""
     assert seeded_good.sales == 0
 
 
@@ -286,6 +437,20 @@ async def test_refund_notify_marks_order_refunded_once(
 
 
 @pytest.mark.asyncio
+async def test_refund_notify_returns_400_for_non_utf8_request_body(app):
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        response = await test_client.post(
+            "/refund/notify",
+            content=b"\xff\xfe\xfd",
+            headers={"Content-Type": "application/octet-stream"},
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"code": "FAIL", "message": "退款回调请求体不是有效 UTF-8"}
+
+
+@pytest.mark.asyncio
 async def test_refund_notify_returns_400_when_wechatpay_serial_verification_fails(
     client,
     seeded_session,
@@ -322,6 +487,110 @@ async def test_refund_notify_returns_400_when_wechatpay_serial_verification_fail
     assert persisted_order.status == OrderStatus.ORDERED
     assert persisted_order.refund_id == ""
     assert seeded_good.sales == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("resource_overrides", "expected_message"),
+    [
+        ({"out_trade_no": {"unexpected": "value"}}, "缺少订单号"),
+        ({"refund_id": {"unexpected": "value"}}, "退款回调 refund_id 格式无效"),
+    ],
+)
+async def test_refund_notify_returns_400_and_leaves_order_unchanged_when_verified_typed_fields_are_malformed(
+    app,
+    seeded_session,
+    customer_user,
+    seeded_good,
+    payment_security_config,
+    resource_overrides,
+    expected_message,
+):
+    order = await _create_unpaid_order(seeded_session, customer_user, seeded_good)
+    await _mark_order_paid(seeded_session, seeded_good, order, transaction_id="txn-before-refund")
+    resource = {
+        "out_trade_no": order.id,
+        "refund_status": "SUCCESS",
+        "refund_id": "refund-malformed-001",
+    }
+    resource.update(resource_overrides)
+    body = _build_encrypted_callback_body(
+        settings.API_V3_KEY,
+        resource,
+        event_type="REFUND.SUCCESS",
+    )
+    headers = _build_callback_headers(
+        payment_security_config["platform_private_key"],
+        payment_security_config["platform_serial"],
+        body,
+    )
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+        response = await test_client.post("/refund/notify", content=body, headers=headers)
+
+    persisted_order = (
+        await seeded_session.execute(select(Order).where(Order.id == order.id))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert response.status_code == 400
+    assert response.json() == {"code": "FAIL", "message": expected_message}
+    assert persisted_order.status == OrderStatus.ORDERED
+    assert persisted_order.refund_id == ""
+    assert persisted_order.transaction_id == "txn-before-refund"
+    assert seeded_good.sales == 1
+
+
+@pytest.mark.asyncio
+async def test_refund_notify_returns_400_and_leaves_order_unchanged_for_unsupported_order_state(
+    app,
+    seeded_session,
+    customer_user,
+    seeded_good,
+    payment_security_config,
+):
+    order = await _create_unpaid_order(seeded_session, customer_user, seeded_good)
+    order.status = OrderStatus.UNPAID
+    await seeded_session.commit()
+    await seeded_session.refresh(order)
+
+    async def override_get_db():
+        yield seeded_session
+
+    original_verify_refund_notify = main_module.verify_refund_notify
+    main_module.app.dependency_overrides[main_module.get_db] = override_get_db
+    main_module.verify_refund_notify = lambda *args, **kwargs: {
+        "event_type": "REFUND.SUCCESS",
+        "resource": {
+            "out_trade_no": order.id,
+            "refund_status": "SUCCESS",
+            "refund_id": "refund-unsupported-state-001",
+        },
+    }
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:
+            response = await test_client.post(
+                "/refund/notify",
+                content="{}",
+                headers={"Content-Type": "application/json"},
+            )
+    finally:
+        main_module.verify_refund_notify = original_verify_refund_notify
+        main_module.app.dependency_overrides.pop(main_module.get_db, None)
+
+    persisted_order = (
+        await seeded_session.execute(select(Order).where(Order.id == order.id))
+    ).scalar_one()
+    await seeded_session.refresh(seeded_good)
+
+    assert response.status_code == 400
+    assert response.json() == {"code": "FAIL", "message": "订单状态不支持退款成功"}
+    assert persisted_order.status == OrderStatus.UNPAID
+    assert persisted_order.refund_id == ""
+    assert seeded_good.sales == 0
 
 
 @pytest.mark.asyncio
