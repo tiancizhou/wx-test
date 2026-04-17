@@ -651,10 +651,10 @@ const app = createApp({
         });
 
         if (res.mock) {
-          // Mock 模式：直接成功
+          await api(`/pay/mock/confirm/${res.order_id}`, { method: 'POST' });
           showBook.value = false;
           vant.showToast('下单成功');
-          loadOrders();
+          try { await loadOrders(); } catch {}
           activeTab.value = 1;
           return;
         }
