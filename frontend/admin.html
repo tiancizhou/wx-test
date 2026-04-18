@@ -8,16 +8,106 @@
 <meta http-equiv="Expires" content="0">
 <title>超级管理员</title>
 <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
 <style>
+:root {
+  --bg-primary: #f6f2eb;
+  --bg-card: #fbf8f2;
+  --bg-input: #fcfaf5;
+  --text-title: #161514;
+  --text-body: #4d4943;
+  --text-secondary: #7d786f;
+  --border: #d8d2c6;
+  --success: #556a61;
+  --info: #6c7d88;
+  --danger: #8d635a;
+  --shadow-soft: 0 18px 40px rgba(24, 21, 16, 0.04);
+}
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-.login-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-.login-box { background: #fff; border-radius: 12px; padding: 30px 20px; width: 100%; max-width: 360px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
-.login-title { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 24px; color: #333; }
-.user-row { display: flex; align-items: center; padding: 12px 16px; background: #fff; border-bottom: 1px solid #f0f0f0; }
-.role-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; color: #fff; }
+@keyframes fadeRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+body {
+  background: var(--bg-primary);
+  font-family: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  color: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+}
+.login-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+.login-box {
+  background: var(--bg-card);
+  border-radius: 24px;
+  padding: 34px 24px;
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid rgba(216,210,198,.92);
+  box-shadow: var(--shadow-soft);
+  animation: fadeRise .55s ease both;
+}
+.login-kicker { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--text-secondary); text-align: center; }
+.login-title {
+  font-family: "Noto Serif SC", serif;
+  font-size: 28px;
+  line-height: 1.3;
+  text-align: center;
+  margin: 12px 0 10px;
+  color: var(--text-title);
+}
+.login-subtitle { font-size: 14px; line-height: 1.8; color: var(--text-body); text-align: center; margin-bottom: 24px; }
+.user-row {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  margin: 0 18px 14px;
+  background: var(--bg-card);
+  border: 1px solid rgba(216,210,198,.92);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+  animation: fadeRise .55s ease both;
+}
+.role-tag { display: inline-flex; align-items: center; font-size: 11px; padding: 4px 8px; border-radius: 999px; color: #f7f4ed; }
+.section-head { padding: 24px 18px 12px; display: flex; justify-content: space-between; align-items: center; animation: fadeRise .5s ease both; }
+.section-title { font-size: 16px; font-weight: 600; color: var(--text-title); }
+.section-sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.empty-state { text-align: center; padding: 36px 18px; color: var(--text-secondary); font-size: 13px; }
+.admin-shell { max-width: 1120px; margin: 0 auto 60px; }
+.entity-main { flex: 1; }
+.entity-head { display: flex; align-items: center; gap: 8px; }
+.entity-title { font-weight: 600; color: var(--text-title); }
+.entity-title.soft { font-weight: 500; }
+.entity-meta { font-size: 12px; color: var(--text-body); margin-top: 4px; line-height: 1.7; }
+.entity-meta.subtle { color: var(--text-secondary); }
+.entity-actions { display: flex; gap: 6px; }
+.popup-sheet { padding: 22px 20px; }
+.popup-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--text-title); }
+.popup-label { padding: 12px 16px 0; font-size: 14px; color: var(--text-secondary); }
+.popup-actions { margin-top: 16px; }
+.radio-row { padding: 12px 16px 0; }
+.login-actions { margin-top: 20px; }
+.login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; }
+.van-cell-group--inset {
+  background: var(--bg-card) !important;
+  margin: 0 18px !important;
+  border-radius: 18px !important;
+  overflow: hidden;
+  border: 1px solid rgba(216,210,198,.92);
+  box-shadow: var(--shadow-soft);
+}
+.van-cell { background: var(--bg-card) !important; color: var(--text-body) !important; }
+.van-cell::after { border-color: rgba(216,210,198,.92) !important; }
+.van-field__label { color: var(--text-secondary) !important; }
+.van-field__control,
+.van-field__control::placeholder { color: var(--text-title) !important; }
+.van-button--primary { background: var(--text-title) !important; border-color: var(--text-title) !important; color: #f7f4ed !important; }
+.van-button--danger { background: transparent !important; border-color: var(--danger) !important; color: var(--danger) !important; }
+.van-button--default { background: rgba(255,253,248,.9) !important; border-color: var(--border) !important; color: var(--text-title) !important; }
+.van-popup__content,
+.van-popup--bottom { background: var(--bg-primary) !important; }
 </style>
 </head>
 <body>
@@ -25,116 +115,103 @@ body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans
   <!-- 登录界面 -->
   <div v-if="!loggedIn" class="login-wrap">
     <div class="login-box">
-      <div class="login-title">超级管理员</div>
-      <van-field v-model="password" type="password" label="密码" placeholder="请输入管理员密码" @keyup.enter="login" />
-      <van-button type="primary" block round style="margin-top:20px;" @click="login" :loading="loading">登录</van-button>
-      <div v-if="loginError" style="color:#e74c3c;font-size:13px;margin-top:10px;text-align:center;">{{ loginError }}</div>
+      <div class="login-title">后台管理</div>
+      <van-field v-model="password" type="password" label="密码" placeholder="请输入管理员密码" @keyup.enter="login"></van-field>
+      <van-button type="primary" block round class="login-actions" @click="login" :loading="loading">登录</van-button>
+      <div v-if="loginError" class="login-error">{{ loginError }}</div>
     </div>
   </div>
 
   <!-- 管理界面 -->
   <template v-else>
-  <div style="padding:12px 16px;font-weight:600;font-size:16px;display:flex;justify-content:space-between;align-items:center;">
-    <span>商家客服 ({{ merchantContacts.length }})</span>
-    <van-button size="small" type="primary" @click="openCreateContact">新增客服</van-button>
-  </div>
-  <div v-if="!merchantContacts.length" style="text-align:center;padding:32px 0;color:#999;">暂无客服</div>
-  <div v-for="contact in merchantContacts" :key="contact.id" class="user-row">
-    <div style="flex:1;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-weight:600;">{{ contact.name }}</span>
-        <span class="role-tag" :style="{background: contact.is_active ? '#07c160' : '#999'}">{{ contact.is_active ? '启用' : '停用' }}</span>
-      </div>
-      <div style="font-size:12px;color:#666;margin-top:4px;">微信号：{{ contact.wechat || '未填' }}</div>
-      <div style="font-size:12px;color:#666;">手机号：{{ contact.phone || '未填' }}</div>
-      <div style="font-size:12px;color:#999;">排序：{{ contact.sort_order }}</div>
+  <div class="admin-shell">
+  <div class="section-head">
+    <div>
+      <div class="section-title">商家列表 ({{ merchantUsers.length }})</div>
     </div>
-    <div style="display:flex;gap:6px;">
-      <van-button size="mini" @click="openEditContact(contact)">编辑</van-button>
-      <van-button size="mini" type="danger" plain @click="confirmRemoveContact(contact)">删除</van-button>
+    <van-button size="small" type="primary" @click="openCreateMerchant">新增商家</van-button>
+  </div>
+  <div v-if="!merchantUsers.length" class="empty-state">暂无商家</div>
+  <div v-for="merchant in merchantUsers" :key="merchant.id" class="user-row">
+    <div class="entity-main">
+      <div class="entity-head">
+        <span class="entity-title">{{ merchant.nickname || ('商家 #' + merchant.id) }}</span>
+        <span class="role-tag" :style="{background: roleColor(merchant.role)}">{{ roleName(merchant.role) }}</span>
+      </div>
+      <div class="entity-meta">OpenID：{{ merchant.openid }}</div>
+      <div class="entity-meta">手机号：{{ merchant.phone || '未填' }}</div>
+    </div>
+    <div class="entity-actions">
+      <van-button size="mini" @click="openEdit(merchant)">编辑</van-button>
+      <van-button size="mini" type="danger" plain @click="confirmDelete(merchant)">删除</van-button>
     </div>
   </div>
 
-  <div style="padding:12px 16px;font-weight:600;font-size:16px;display:flex;justify-content:space-between;align-items:center;">
-    <span>用户管理 ({{ users.length }})</span>
+  <div class="section-head">
+    <div>
+      <div class="section-title">用户管理 ({{ users.length }})</div>
+    </div>
     <van-button size="small" type="primary" @click="showCreate=true">创建用户</van-button>
   </div>
 
-  <div v-if="!users.length" style="text-align:center;padding:60px 0;color:#999;">暂无用户</div>
+  <div v-if="!users.length" class="empty-state">暂无用户</div>
   <div v-for="u in users" :key="u.id" class="user-row">
-    <div style="flex:1;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-weight:500;">{{ u.nickname || u.openid.slice(0,16) }}</span>
+    <div class="entity-main">
+      <div class="entity-head">
+        <span class="entity-title soft">{{ u.nickname || u.openid.slice(0,16) }}</span>
         <span class="role-tag" :style="{background: roleColor(u.role)}">{{ roleName(u.role) }}</span>
       </div>
-      <div style="font-size:12px;color:#999;margin-top:4px;">
+      <div class="entity-meta subtle">
         ID: {{ u.id }} · OpenID: {{ u.openid.slice(0,20) }}{{ u.openid.length > 20 ? '...' : '' }}
       </div>
-      <div v-if="u.phone" style="font-size:12px;color:#666;">{{ u.phone }}</div>
+      <div v-if="u.phone" class="entity-meta">{{ u.phone }}</div>
     </div>
-    <div style="display:flex;gap:6px;">
+    <div class="entity-actions">
       <van-button size="mini" @click="openEdit(u)">编辑</van-button>
       <van-button size="mini" type="danger" plain @click="confirmDelete(u)">删除</van-button>
     </div>
   </div>
-
-  <van-popup v-model:show="showContactForm" position="bottom" round :style="{ minHeight: '45%' }">
-    <div style="padding:20px;">
-      <div style="font-size:16px;font-weight:600;margin-bottom:16px;">{{ editingContactId ? '编辑客服' : '新增客服' }}</div>
-      <van-cell-group inset>
-        <van-field v-model="contactForm.name" label="名称" placeholder="客服名称" />
-        <van-field v-model="contactForm.wechat" label="微信号" placeholder="客服微信号" />
-        <van-field v-model="contactForm.phone" label="手机号" placeholder="客服手机号" type="tel" />
-        <van-field v-model="contactForm.sort_order" label="排序" placeholder="10" type="number" />
-      </van-cell-group>
-      <div style="padding:12px 16px 0;font-size:14px;color:#666;">状态</div>
-      <van-radio-group v-model="contactForm.is_active" direction="horizontal" style="padding:12px 16px 0;">
-        <van-radio :name="true" style="margin-right:12px;">启用</van-radio>
-        <van-radio :name="false">停用</van-radio>
-      </van-radio-group>
-      <van-button type="primary" block round style="margin-top:16px;" @click="saveContact" :loading="savingContact">保存</van-button>
-    </div>
-  </van-popup>
+  </div>
 
   <!-- 创建用户弹窗 -->
   <van-popup v-model:show="showCreate" position="bottom" round :style="{ minHeight: '50%' }">
-    <div style="padding:20px;">
-      <div style="font-size:16px;font-weight:600;margin-bottom:16px;">创建用户</div>
+    <div class="popup-sheet">
+      <div class="popup-title">创建用户</div>
       <van-cell-group inset>
-        <van-field v-model="createForm.openid" label="OpenID" placeholder="用户唯一标识" />
-        <van-field v-model="createForm.nickname" label="昵称" placeholder="可选" />
-        <van-field v-model="createForm.phone" label="手机号" placeholder="可选" type="tel" />
+        <van-field v-model="createForm.openid" label="OpenID" placeholder="用户唯一标识"></van-field>
+        <van-field v-model="createForm.nickname" label="昵称" placeholder="可选"></van-field>
+        <van-field v-model="createForm.phone" label="手机号" placeholder="可选" type="tel"></van-field>
       </van-cell-group>
-      <div style="padding:10px 16px;font-size:14px;color:#666;">角色</div>
-      <van-radio-group v-model="createForm.role" direction="horizontal" style="padding:0 16px;">
+      <div class="popup-label">角色</div>
+      <van-radio-group v-model="createForm.role" direction="horizontal" class="radio-row">
         <van-radio name="CUSTOMER" style="margin-right:12px;">客户</van-radio>
         <van-radio name="MERCHANT">商家</van-radio>
       </van-radio-group>
-      <van-button type="primary" block round style="margin-top:16px;" @click="createUser">创建</van-button>
+      <van-button type="primary" block round class="popup-actions" @click="createUser">创建</van-button>
     </div>
   </van-popup>
 
   <!-- 编辑用户弹窗 -->
   <van-popup v-model:show="showEdit" position="bottom" round :style="{ minHeight: '45%' }">
-    <div style="padding:20px;">
-      <div style="font-size:16px;font-weight:600;margin-bottom:16px;">编辑用户</div>
+    <div class="popup-sheet">
+      <div class="popup-title">编辑用户</div>
       <van-cell-group inset>
-        <van-field v-model="editForm.nickname" label="昵称" />
-        <van-field v-model="editForm.phone" label="手机号" type="tel" />
+        <van-field v-model="editForm.nickname" label="昵称"></van-field>
+        <van-field v-model="editForm.phone" label="手机号" type="tel"></van-field>
       </van-cell-group>
-      <div style="padding:10px 16px;font-size:14px;color:#666;">角色</div>
-      <van-radio-group v-model="editForm.role" direction="horizontal" style="padding:0 16px;">
+      <div class="popup-label">角色</div>
+      <van-radio-group v-model="editForm.role" direction="horizontal" class="radio-row">
         <van-radio name="CUSTOMER" style="margin-right:12px;">客户</van-radio>
         <van-radio name="MERCHANT">商家</van-radio>
       </van-radio-group>
-      <van-button type="primary" block round style="margin-top:16px;" @click="updateUser">保存</van-button>
+      <van-button type="primary" block round class="popup-actions" @click="updateUser">保存</van-button>
     </div>
   </van-popup>
   </template>
 </div>
 
 <script>
-const { createApp, ref, onMounted } = Vue;
+const { createApp, ref, computed, onMounted } = Vue;
 
 const app = createApp({
   setup() {
@@ -143,15 +220,11 @@ const app = createApp({
     const loading = ref(false);
     const loginError = ref('');
     const users = ref([]);
-    const merchantContacts = ref([]);
-    const showContactForm = ref(false);
-    const editingContactId = ref(0);
-    const contactForm = ref({ name: '', wechat: '', phone: '', is_active: true, sort_order: 0 });
-    const savingContact = ref(false);
     const showCreate = ref(false);
     const showEdit = ref(false);
     const createForm = ref({ openid: '', nickname: '', phone: '', role: 'CUSTOMER' });
     const editForm = ref({ id: 0, nickname: '', phone: '', role: '' });
+    const merchantUsers = computed(() => users.value.filter(user => user.role === 'MERCHANT'));
 
     function getKey() { return localStorage.getItem('admin_key') || ''; }
     function headers() { return { 'X-Admin-Key': getKey(), 'Content-Type': 'application/json' }; }
@@ -187,7 +260,6 @@ const app = createApp({
         localStorage.setItem('admin_key', password.value);
         loggedIn.value = true;
         loadUsers();
-        loadMerchantContacts();
       } catch (e) {
         loginError.value = e.message;
       } finally {
@@ -198,58 +270,9 @@ const app = createApp({
     async function loadUsers() {
       try { users.value = await api('/admin/users'); } catch (e) { console.error(e); }
     }
-    async function loadMerchantContacts() {
-      try { merchantContacts.value = await api('/admin/merchant-contacts'); } catch (e) { console.error(e); }
-    }
-    function openCreateContact() {
-      editingContactId.value = 0;
-      contactForm.value = {
-        name: '',
-        wechat: '',
-        phone: '',
-        is_active: true,
-        sort_order: merchantContacts.value.length * 10 + 10,
-      };
-      showContactForm.value = true;
-    }
-    function openEditContact(contact) {
-      editingContactId.value = contact.id;
-      contactForm.value = { ...contact };
-      showContactForm.value = true;
-    }
-    async function saveContact() {
-      if (!contactForm.value.name.trim()) {
-        vant.showToast('请输入客服名称');
-        return;
-      }
-      savingContact.value = true;
-      try {
-        const payload = {
-          ...contactForm.value,
-          sort_order: Number(contactForm.value.sort_order || 0),
-        };
-        const path = editingContactId.value
-          ? `/admin/merchant-contacts/${editingContactId.value}`
-          : '/admin/merchant-contacts';
-        const method = editingContactId.value ? 'PUT' : 'POST';
-        await api(path, { method, body: JSON.stringify(payload) });
-        showContactForm.value = false;
-        vant.showToast('已保存');
-        await loadMerchantContacts();
-      } catch (e) { vant.showToast('保存失败: ' + e.message); }
-      finally { savingContact.value = false; }
-    }
-    function confirmRemoveContact(contact) {
-      vant.showConfirmDialog({ title: '确认删除', message: `删除客服 ${contact.name}？` })
-        .then(() => removeContact(contact))
-        .catch(() => {});
-    }
-    async function removeContact(contact) {
-      try {
-        await api(`/admin/merchant-contacts/${contact.id}`, { method: 'DELETE' });
-        vant.showToast('已删除');
-        await loadMerchantContacts();
-      } catch (e) { vant.showToast('删除失败: ' + e.message); }
+    function openCreateMerchant() {
+      createForm.value = { openid: '', nickname: '', phone: '', role: 'MERCHANT' };
+      showCreate.value = true;
     }
 
     async function createUser() {
@@ -301,7 +324,7 @@ const app = createApp({
     }
 
     function roleColor(r) {
-      return { CUSTOMER: '#07c160', MERCHANT: '#1890ff' }[r] || '#999';
+      return { CUSTOMER: '#556a61', MERCHANT: '#6c7d88' }[r] || '#7d786f';
     }
 
     function roleName(r) {
@@ -317,7 +340,6 @@ const app = createApp({
             password.value = key;
             loggedIn.value = true;
             loadUsers();
-            loadMerchantContacts();
           } else {
             localStorage.removeItem('admin_key');
           }
@@ -329,9 +351,9 @@ const app = createApp({
 
     return {
       password, loggedIn, loading, loginError, users,
-      merchantContacts, showContactForm, editingContactId, contactForm, savingContact,
+      merchantUsers,
       showCreate, showEdit, createForm, editForm,
-      openCreateContact, openEditContact, saveContact, confirmRemoveContact,
+      openCreateMerchant,
       login, loadUsers, createUser, openEdit, updateUser, confirmDelete, roleColor, roleName,
     };
   }

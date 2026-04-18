@@ -89,22 +89,6 @@ class MerchantContactOut(BaseModel):
         from_attributes = True
 
 
-class MerchantContactCreate(BaseModel):
-    name: str
-    wechat: str = ""
-    phone: str = ""
-    is_active: bool = True
-    sort_order: int = 0
-
-
-class MerchantContactUpdate(BaseModel):
-    name: Optional[str] = None
-    wechat: Optional[str] = None
-    phone: Optional[str] = None
-    is_active: Optional[bool] = None
-    sort_order: Optional[int] = None
-
-
 class ConversationSummaryOut(BaseModel):
     conversation_id: int
     customer_id: int

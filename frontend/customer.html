@@ -8,153 +8,889 @@
 <meta http-equiv="Expires" content="0">
 <title>到店按摩</title>
 <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
 <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
 <style>
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-card: #252540;
-  --bg-card-hover: #2d2d4a;
-  --bg-input: #1e1e36;
-  --bg-chat: #12122a;
-  --gold: #c9a96e;
-  --gold-light: #e0c48a;
-  --text-title: #ffffff;
-  --text-body: #b0b0c0;
-  --text-secondary: #787890;
-  --border: #3a3a5c;
-  --status-success: #4caf88;
-  --status-warning: #d4a03c;
-  --status-danger: #c0564a;
-  --status-info: #5b8dd9;
+  --bg-primary: #f6f2eb;
+  --bg-card: #fbf8f2;
+  --bg-card-hover: #f1ece2;
+  --bg-input: #fffdf8;
+  --bg-chat: #f6f2eb;
+  --bg-bar: #f7f4ee;
+  --accent: #556a61;
+  --accent-soft: rgba(85, 106, 97, 0.1);
+  --text-title: #161514;
+  --text-body: #4d4943;
+  --text-secondary: #7d786f;
+  --border: #d8d2c6;
+  --border-strong: #bdb4a4;
+  --status-success: #556a61;
+  --status-warning: #877252;
+  --status-danger: #8d635a;
+  --status-info: #6c7d88;
+  --shadow-soft: 0 18px 40px rgba(24, 21, 16, 0.04);
+  --radius-lg: 24px;
+  --radius-md: 18px;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: var(--text-body); }
+@keyframes fadeRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+body {
+  background: var(--bg-primary);
+  font-family: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  color: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
 
 /* Loading */
-.loading-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.loading-mask {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.error-panel { text-align: center; }
+.error-text { color: var(--text-body); margin-bottom: 16px; }
+.page-section { padding-bottom: 60px; }
+.content-grow { flex: 1; }
+.content-grow.min { min-width: 0; }
+.title-15 { font-size: 15px; }
+.meta-13 { font-size: 13px; }
+.meta-13.top-gap { margin-top: 4px; }
+.inline-flex-start {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.thumb-70 {
+  width: 70px;
+  height: 70px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+}
+.metric-price {
+  color: var(--text-title);
+  font-size: 18px;
+  font-weight: 600;
+  font-family: "Noto Serif SC", serif;
+}
+.chevron-inline {
+  color: var(--text-secondary);
+  align-self: center;
+  font-size: 14px;
+}
+.detail-facts-wrap {
+  padding: 0 18px 14px;
+}
+.appt-row {
+  font-size: 13px;
+}
+.appt-row + .appt-row {
+  margin-top: 4px;
+}
+.action-bar {
+  display: flex;
+  gap: 8px;
+}
+.action-bar.top-spaced {
+  padding: 0 10px;
+  margin-top: 12px;
+}
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.message-meta-item.align-right {
+  text-align: right;
+}
+.empty-state.compact {
+  padding: 40px 0;
+}
+.popup-panel.scrollable {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.detail-popup-shell {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.detail-cta-actions {
+  display: flex;
+  gap: 10px;
+}
+.btn-flex-1 { flex: 1; }
+.btn-flex-2 { flex: 2; }
+.book-panel { padding: 20px; }
+.book-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-title);
+}
+.book-block { margin-bottom: 12px; }
+.book-block.lg { margin-bottom: 16px; }
+.book-block.double {
+  display: flex;
+  gap: 10px;
+}
+.book-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.book-col { flex: 1; }
+.book-stepper-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.book-qty {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-title);
+  min-width: 20px;
+  text-align: center;
+}
+.book-options-row {
+  display: flex;
+  gap: 8px;
+}
+.book-options-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.book-popup input[type="datetime-local"] {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 11px 12px;
+  font-size: 14px;
+  outline: none;
+  background: var(--bg-input);
+  color: var(--text-title);
+}
+.book-popup input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  opacity: 0.72;
+}
+
+.page-hero {
+  padding: 32px 18px 28px;
+  border-bottom: 1px solid rgba(216, 210, 198, 0.9);
+  animation: fadeRise .55s ease both;
+}
+.page-title {
+  font-family: "Noto Serif SC", serif;
+  font-size: 31px;
+  line-height: 1.28;
+  color: var(--text-title);
+}
+.catalog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 18px 18px 2px;
+}
+.catalog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+.catalog-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.order-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 18px 18px 6px;
+}
+.order-section-copy {
+  max-width: 32rem;
+}
+.order-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+.order-section-count {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.order-card-index {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.order-card-index::before {
+  content: "";
+  width: 16px;
+  height: 1px;
+  background: rgba(125, 120, 111, 0.55);
+}
+.order-card-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(216, 210, 198, 0.92);
+}
+.order-card-meta-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.order-card-meta-value {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-title);
+}
+.order-detail-shell {
+  padding-bottom: 70px;
+}
+.order-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.order-detail-fact {
+  padding: 14px 12px;
+  border-radius: 18px;
+  background: var(--bg-card);
+  border: 1px solid rgba(216, 210, 198, 0.92);
+}
+.order-detail-fact-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.order-detail-fact-value {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-title);
+  font-weight: 500;
+}
 
 /* Product Grid */
-.good-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; contain: layout paint; }
-.good-card { background: var(--bg-card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); cursor: pointer; transition: transform .15s, background-color .15s; }
-.good-card:active { transform: scale(.97); background: var(--bg-card-hover); }
-.good-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
-.good-card-info { padding: 10px; }
-.good-card-title { font-size: 14px; font-weight: 600; color: var(--text-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.good-card-bottom { display: flex; align-items: baseline; justify-content: space-between; margin-top: 6px; }
-.good-card-price { color: var(--gold); font-size: 16px; font-weight: 700; }
-.good-card-price .unit { font-size: 11px; }
-.good-card-original { font-size: 11px; color: var(--text-secondary); text-decoration: line-through; margin-left: 4px; }
-.good-card-tag { border: 1px solid var(--gold); color: var(--gold); font-size: 10px; padding: 1px 6px; border-radius: 10px; }
-.good-card-meta { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+.good-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+  contain: layout paint;
+}
+.good-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid rgba(216, 210, 198, 0.92);
+  cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+  box-shadow: var(--shadow-soft);
+  animation: fadeRise .55s ease both;
+}
+.good-card:active {
+  background: var(--bg-card-hover);
+  border-color: var(--border-strong);
+  transform: translateY(1px);
+}
+.good-card img {
+  width: 100%;
+  aspect-ratio: 5 / 4;
+  object-fit: cover;
+  display: block;
+  filter: saturate(0.92);
+}
+.good-card-info { padding: 14px; }
+.good-card-serial {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.good-card-serial::before {
+  content: "";
+  width: 18px;
+  height: 1px;
+  background: rgba(125, 120, 111, 0.55);
+}
+.good-card-title {
+  font-size: 15px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--text-title);
+  min-height: 2.8em;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.good-card-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+.good-card-price {
+  color: var(--text-title);
+  font-family: "Noto Serif SC", serif;
+  font-size: 22px;
+  font-weight: 600;
+}
+.good-card-price .unit { font-size: 12px; }
+.good-card-original {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  margin-left: 6px;
+}
+.good-card-tag {
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.good-card-meta { font-size: 11px; color: var(--text-secondary); margin-top: 8px; }
 
 /* Order */
-.order-card { background: var(--bg-card); margin: 10px; border-radius: 10px; padding: 14px; border: 1px solid var(--border); cursor: pointer; }
-.order-status { display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 10px; color: #fff; }
-.status-consult { background: #5b8dd9; }
-.status-unpaid { background: #787890; }
-.status-pending { background: #d4a03c; }
-.status-accepted { background: #07c160; }
-.status-completed { background: #787890; }
-.section-pad-bottom { padding-bottom: 60px; }
-.empty-state { text-align: center; padding: 60px 0; color: #787890; font-size: 13px; }
+.order-card {
+  background: var(--bg-card);
+  margin: 0 18px 14px;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  border: 1px solid rgba(216, 210, 198, 0.92);
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  animation: fadeRise .55s ease both;
+}
+.order-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  border: 1px solid currentColor;
+  background: transparent;
+}
+.status-consult { color: var(--status-info); }
+.status-unpaid { color: var(--text-secondary); }
+.status-pending { color: var(--status-warning); }
+.status-accepted { color: var(--status-success); }
+.status-completed { color: var(--text-secondary); }
+.section-pad-bottom { padding-bottom: 76px; }
+.empty-state {
+  text-align: center;
+  padding: 72px 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.8;
+}
 .row-between { display: flex; justify-content: space-between; align-items: center; }
-.title-white { font-weight: 600; color: #ffffff; }
-.subtle-text { font-size: 13px; color: #b0b0c0; }
-.gold-price { color: #c9a96e; font-weight: 600; }
+.title-white { font-weight: 600; color: var(--text-title); }
+.subtle-text { font-size: 13px; color: var(--text-body); }
+.gold-price { color: var(--text-title); font-weight: 600; }
 .chat-bubble-col { display: flex; flex-direction: column; }
-.meta-time { font-size: 11px; color: #787890; }
+.meta-time { font-size: 11px; color: var(--text-secondary); }
 .conv-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.conv-title-text { font-weight: 600; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.consult-badge { flex-shrink: 0; font-size: 10px; border: 1px solid var(--gold); color: var(--gold); padding: 1px 6px; border-radius: 8px; }
-.unread-badge { flex-shrink: 0; min-width: 18px; height: 18px; border-radius: 9px; background: #e74c3c; color: #fff; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
+.conv-title-text { font-weight: 600; color: var(--text-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.consult-badge { flex-shrink: 0; font-size: 10px; border: 1px solid var(--status-info); color: var(--status-info); padding: 2px 7px; border-radius: 999px; }
+.unread-badge {
+  flex-shrink: 0;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--text-title);
+  color: var(--bg-primary);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
 .status-badge-sm { font-size: 10px; padding: 1px 8px; }
 .time-right { flex-shrink: 0; margin-left: 8px; }
-.single-line-preview { font-size: 13px; color: #b0b0c0; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.order-summary-text { font-size: 13px; color: #b0b0c0; margin-top: 8px; }
-.order-price { font-size: 15px; color: #c9a96e; margin-top: 6px; font-weight: 600; }
+.single-line-preview { font-size: 13px; color: var(--text-body); margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-summary-text { font-size: 13px; color: var(--text-body); margin-top: 8px; line-height: 1.7; }
+.order-price {
+  font-size: 18px;
+  color: var(--text-title);
+  margin-top: 8px;
+  font-family: "Noto Serif SC", serif;
+  font-weight: 600;
+}
 
 /* Chat */
-.chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 50px - env(safe-area-inset-bottom)); background: var(--bg-chat); contain: layout paint; }
-.chat-messages { flex: 1; overflow-y: auto; padding: 10px; contain: layout paint; display: flex; flex-direction: column; }
-.bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; margin-bottom: 10px; font-size: 14px; line-height: 1.5; word-break: break-all; color: #e0e0e0; }
-.bubble-left { background: var(--bg-card-hover); align-self: flex-start; border-bottom-left-radius: 4px; }
-.bubble-right { background: #2d5a2d; align-self: flex-end; border-bottom-right-radius: 4px; color: #ffffff; }
-.bubble-role { font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; }
-.bubble-right .bubble-role { text-align: right; color: #8aad8a; }
-.bubble-time { font-size: 10px; color: var(--text-secondary); margin-top: 4px; }
-.bubble-right .bubble-time { text-align: right; color: #8aad8a; }
-.chat-input-bar { display: flex; padding: 8px 10px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); background: var(--bg-card); border-top: 1px solid var(--border); }
-.chat-input-bar input { flex: 1; border: 1px solid var(--border); border-radius: 20px; padding: 8px 14px; font-size: 14px; outline: none; background: var(--bg-input); color: var(--text-title); }
+.chat-wrap {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 54px - env(safe-area-inset-bottom));
+  background: transparent;
+  contain: layout paint;
+}
+.message-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+  contain: layout paint;
+  display: flex;
+  flex-direction: column;
+}
+.message-stream {
+  width: min(100%, 920px);
+  margin: 0 auto;
+}
+.bubble {
+  max-width: min(76%, 34rem);
+  padding: 12px 14px;
+  border-radius: 18px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  line-height: 1.68;
+  word-break: break-all;
+  color: var(--text-title);
+  border: 1px solid rgba(216, 210, 198, 0.92);
+}
+.bubble-left {
+  background: var(--bg-card);
+  align-self: flex-start;
+}
+.bubble-right {
+  background: var(--accent-soft);
+  border-color: rgba(85, 106, 97, 0.18);
+  align-self: flex-end;
+}
+.bubble-role { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+.bubble-right .bubble-role { text-align: right; color: var(--accent); }
+.bubble-time { font-size: 10px; color: var(--text-secondary); margin-top: 6px; }
+.bubble-right .bubble-time { text-align: right; color: var(--accent); }
+.bubble-order-card {
+  display: grid;
+  gap: 4px;
+}
+.bubble-order-title {
+  font-weight: 600;
+  color: var(--text-title);
+}
+.bubble-order-meta {
+  font-size: 12px;
+  color: var(--text-body);
+}
+.bubble-order-number {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.bubble-order-number::before {
+  content: "";
+  width: 16px;
+  height: 1px;
+  background: rgba(125, 120, 111, 0.55);
+}
+.chat-input-bar {
+  display: flex;
+  gap: 10px;
+  padding: 12px 18px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  background: var(--bg-bar);
+  border-top: 1px solid rgba(216, 210, 198, 0.92);
+}
+.chat-input-bar input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 11px 16px;
+  font-size: 14px;
+  outline: none;
+  background: var(--bg-input);
+  color: var(--text-title);
+}
 .chat-input-bar input::placeholder { color: var(--text-secondary); }
-.chat-input-bar button { margin-left: 8px; border: none; background: var(--gold); color: var(--bg-primary); border-radius: 20px; padding: 0 20px; font-size: 14px; font-weight: 600; }
+.chat-input-bar button {
+  border: 1px solid var(--text-title);
+  background: var(--text-title);
+  color: #f7f4ed;
+  border-radius: 999px;
+  padding: 0 18px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
 
 /* Detail popup */
 .detail-popup { background: var(--bg-primary); }
-.detail-popup .detail-title { font-size: 20px; font-weight: 700; color: var(--text-title); }
-.detail-popup .detail-price { color: var(--gold); font-size: 26px; font-weight: 700; }
+.detail-shell {
+  padding-bottom: 110px;
+}
+.detail-media {
+  position: relative;
+  padding: 18px 18px 0;
+}
+.detail-media img {
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  border-radius: 26px;
+  display: block;
+}
+.detail-media-caption {
+  position: absolute;
+  left: 34px;
+  bottom: 16px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--bg-bar);
+  border: 1px solid rgba(216, 210, 198, 0.92);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.detail-body {
+  padding: 22px 18px 0;
+}
+.detail-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+}
+.detail-price-wrap {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.detail-lead {
+  margin-top: 14px;
+  font-size: 14px;
+  line-height: 1.95;
+  color: var(--text-body);
+}
+.detail-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+.detail-fact {
+  padding: 14px 12px;
+  border-radius: 18px;
+  background: var(--bg-card);
+  border: 1px solid rgba(216, 210, 198, 0.92);
+}
+.detail-fact-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.detail-fact-value {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-title);
+  font-weight: 600;
+}
+.detail-gallery {
+  margin-top: 26px;
+}
+.detail-gallery-label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+.detail-gallery-item {
+  margin-bottom: 10px;
+}
+.detail-popup .detail-title {
+  font-family: "Noto Serif SC", serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-title);
+  line-height: 1.35;
+}
+.detail-popup .detail-price {
+  color: var(--text-title);
+  font-size: 30px;
+  font-weight: 600;
+  font-family: "Noto Serif SC", serif;
+}
 .detail-popup .detail-original { font-size: 14px; color: var(--text-secondary); text-decoration: line-through; }
 .detail-popup .detail-meta { font-size: 13px; color: var(--text-secondary); }
-.detail-popup .detail-desc { font-size: 14px; color: var(--text-body); line-height: 1.8; white-space: pre-wrap; }
+.detail-popup .detail-desc { font-size: 14px; color: var(--text-body); line-height: 1.9; white-space: pre-wrap; }
 .detail-popup .detail-img { width: 100%; border-radius: 8px; }
-.detail-cta { position: fixed; bottom: 0; left: 0; right: 0; padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); background: var(--bg-primary); border-top: 1px solid var(--border); }
+.detail-cta {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 14px 18px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  background: var(--bg-bar);
+  border-top: 1px solid rgba(216, 210, 198, 0.92);
+}
+
+.popup-panel {
+  padding: 20px;
+}
+.popup-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-title);
+  margin-bottom: 12px;
+}
+.popup-empty {
+  text-align: center;
+  padding: 20px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
 
 /* Booking popup */
 .book-popup { background: var(--bg-card); }
-.book-popup input[type="tel"] { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; outline: none; background: var(--bg-input); color: var(--text-title); }
+.book-popup input[type="tel"] { width: 100%; border: 1px solid var(--border); border-radius: 14px; padding: 11px 12px; font-size: 14px; outline: none; background: var(--bg-input); color: var(--text-title); }
 .book-popup input::placeholder { color: var(--text-secondary); }
+.book-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.book-stepper {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  background: var(--bg-input);
+}
 
 /* Order detail header */
-.detail-header { background: var(--bg-card); padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; contain: layout paint; }
-.detail-header .back-arrow { font-size: 20px; cursor: pointer; margin-right: 10px; color: var(--gold); }
+.detail-header {
+  background: var(--bg-bar);
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(216, 210, 198, 0.92);
+  display: flex;
+  align-items: center;
+  contain: layout paint;
+}
+.detail-header .back-arrow { font-size: 20px; cursor: pointer; margin-right: 10px; color: var(--text-title); }
 
 /* Product card in order detail (clickable) */
-.order-good-card { background: var(--bg-card); padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; cursor: pointer; border-left: 4px solid var(--gold); contain: layout paint; }
+.order-good-card {
+  background: var(--bg-card);
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 14px;
+  cursor: pointer;
+  border-left: 2px solid var(--text-title);
+  contain: layout paint;
+}
 .order-good-card:active { background: var(--bg-card-hover); }
 
 /* Appointment info */
-.appt-info { background: var(--bg-card); padding: 12px 14px; border-bottom: 1px solid var(--border); contain: layout paint; }
+.appt-info { background: var(--bg-card); padding: 16px 18px; border-bottom: 1px solid var(--border); contain: layout paint; }
 .appt-info .label { color: var(--text-title); }
 .appt-info .value { color: var(--text-body); }
 
 /* Profile */
 .profile-section { padding: 0 0 60px; contain: layout paint; }
-.profile-card { display: flex; align-items: center; gap: 14px; padding: 28px 20px; background: linear-gradient(135deg, #252540, #1e1e36); }
-.profile-avatar { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, var(--gold), #e0c48a); color: var(--bg-primary); font-size: 22px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 20px 22px;
+  background: transparent;
+  border-bottom: 1px solid rgba(216, 210, 198, 0.92);
+}
+.profile-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--text-title);
+  color: #f7f4ed;
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: "Noto Serif SC", serif;
+}
 .profile-info { min-width: 0; }
 .profile-name { font-size: 17px; font-weight: 600; color: var(--text-title); }
 .profile-phone { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
-.profile-stats { display: flex; background: var(--bg-card); margin: 12px 10px; border-radius: 10px; border: 1px solid var(--border); padding: 16px 0; }
+.profile-stats {
+  display: flex;
+  background: var(--bg-card);
+  margin: 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(216, 210, 198, 0.92);
+  padding: 18px 0;
+  box-shadow: var(--shadow-soft);
+  animation: fadeRise .55s ease both;
+}
 .stat-item { flex: 1; text-align: center; cursor: pointer; }
-.stat-num { font-size: 20px; font-weight: 700; color: var(--text-title); }
+.stat-num { font-size: 24px; font-weight: 600; color: var(--text-title); font-family: "Noto Serif SC", serif; }
 .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
-.filter-bar { display: flex; gap: 8px; padding: 10px; overflow-x: auto; }
-.filter-tag { flex-shrink: 0; padding: 6px 14px; border-radius: 16px; font-size: 13px; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border); cursor: pointer; }
-.filter-tag.active { color: var(--bg-primary); background: var(--gold); border-color: var(--gold); font-weight: 600; }
+.filter-bar { display: flex; gap: 8px; padding: 16px 18px 8px; overflow-x: auto; }
+.filter-tag {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid rgba(216, 210, 198, 0.92);
+  cursor: pointer;
+}
+.filter-tag.active { color: #f7f4ed; background: var(--text-title); border-color: var(--text-title); font-weight: 600; }
 
-/* Vant dark overrides */
-.van-tabbar { background: var(--bg-card) !important; border-top: 1px solid var(--border) !important; padding-bottom: env(safe-area-inset-bottom) !important; }
-.van-tabbar-item--active { color: var(--gold) !important; }
+/* Vant light overrides */
+.van-tabbar {
+  background: var(--bg-bar) !important;
+  border-top: 1px solid rgba(216, 210, 198, 0.92) !important;
+  padding-bottom: env(safe-area-inset-bottom) !important;
+}
+.van-tabbar-item--active { color: var(--text-title) !important; }
 .van-tabbar-item { color: var(--text-secondary) !important; background: transparent !important; }
 .van-popup--bottom { background: var(--bg-primary) !important; }
-.van-button--primary { background: var(--gold) !important; border-color: var(--gold) !important; color: var(--bg-primary) !important; font-weight: 600 !important; }
-.van-cell-group--inset { background: var(--bg-card) !important; margin: 0 !important; border-radius: 10px !important; overflow: hidden; }
+.van-popup__content { background: transparent; }
+.van-button--primary {
+  background: var(--text-title) !important;
+  border-color: var(--text-title) !important;
+  color: #f7f4ed !important;
+  font-weight: 600 !important;
+}
+.van-button--danger {
+  background: transparent !important;
+  border-color: var(--status-danger) !important;
+  color: var(--status-danger) !important;
+}
+.van-button--default {
+  border-color: var(--border) !important;
+  color: var(--text-title) !important;
+  background: var(--bg-card) !important;
+}
+.van-cell-group--inset {
+  background: var(--bg-card) !important;
+  margin: 0 18px !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden;
+  border: 1px solid rgba(216, 210, 198, 0.92);
+  box-shadow: var(--shadow-soft);
+}
 .van-cell { background: var(--bg-card) !important; color: var(--text-body) !important; }
 .van-cell__title { color: var(--text-body) !important; }
 .van-cell__value { color: var(--text-title) !important; }
-.van-cell::after { border-color: var(--border) !important; }
-.van-loading__text { color: var(--gold) !important; }
-.van-loading__spinner .van-loading__dot { background: var(--gold) !important; }
+.van-cell::after { border-color: rgba(216, 210, 198, 0.92) !important; }
+.van-field__control,
+.van-field__control::placeholder { color: var(--text-title) !important; }
+.van-field__label { color: var(--text-secondary) !important; }
+.van-loading__text { color: var(--text-title) !important; }
+.van-loading__spinner .van-loading__dot { background: var(--text-title) !important; }
+
+@media (min-width: 860px) {
+  .page-hero-grid {
+    grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.8fr);
+    align-items: end;
+  }
+  .good-grid,
+  .section-pad-bottom,
+  .profile-section,
+  .chat-wrap,
+  .detail-popup > div,
+  .book-popup,
+  .chat-messages,
+  .page-hero {
+    max-width: 1080px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .chat-wrap { height: calc(100vh - 64px); }
+  .good-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .good-grid {
+    grid-template-columns: 1fr;
+  }
+  .order-card-meta-grid,
+  .detail-facts {
+    grid-template-columns: 1fr;
+  }
+  .order-detail-facts {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 </head>
 <body>
 <div id="app">
   <!-- 登录加载中 -->
   <div v-if="!ready" class="loading-mask">
-    <van-loading v-if="!loginError" size="36px">正在登录...</van-loading>
-    <div v-else style="text-align:center;">
-      <div style="color:#b0b0c0;margin-bottom:16px;">登录失败，请重试</div>
+    <van-loading v-if="!loginError" size="36px"></van-loading>
+    <div v-else class="error-panel">
+      <div class="error-text">登录失败，请重试</div>
       <van-button type="primary" round @click="retryLogin">重新登录</van-button>
     </div>
   </div>
@@ -169,16 +905,19 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
   </van-tabbar>
 
   <!-- 首页：商品列表 -->
-  <div v-show="activeTab === 0" style="padding-bottom:60px;">
-    <div style="background:linear-gradient(180deg,#1a1a2e,#252540);padding:24px 16px 36px;">
-      <div style="font-size:22px;font-weight:700;color:#c9a96e;">到店按摩</div>
-      <div style="font-size:13px;color:#b0b0c0;margin-top:4px;">匠心技艺 到店体验</div>
-      <div style="height:1px;background:linear-gradient(90deg,transparent,#c9a96e,transparent);margin-top:16px;opacity:.4;"></div>
+  <div v-show="activeTab === 0" class="page-section">
+    <div class="page-hero">
+      <div class="page-title">到店按摩</div>
+    </div>
+    <div class="catalog-head">
+      <div class="catalog-title">服务</div>
+      <div class="catalog-count">{{ goods.length }}</div>
     </div>
     <div class="good-grid">
-      <div v-for="g in goods" :key="g.id" class="good-card" @click="openDetail(g)">
+      <div v-for="(g, index) in goods" :key="g.id" class="good-card" @click="openDetail(g)">
         <img :src="g.img_url || 'https://via.placeholder.com/300x170/252540/787890?text=No+Image'" loading="lazy">
         <div class="good-card-info">
+          <div class="good-card-serial">{{ String(index + 1).padStart(2, '0') }}</div>
           <div class="good-card-title">{{ g.title }}</div>
           <div class="good-card-bottom">
             <div>
@@ -197,6 +936,10 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
   <div v-show="activeTab === 1">
     <!-- 订单列表视图 -->
     <div v-show="!currentOrder" class="section-pad-bottom">
+      <div class="order-section-head">
+        <div class="order-section-title">订单</div>
+        <div class="order-section-count">{{ orders.length }}</div>
+      </div>
       <!-- 筛选栏 -->
       <div class="filter-bar">
         <div :class="['filter-tag', orderFilter === null ? 'active' : '']" @click="clearFilter">全部</div>
@@ -206,44 +949,63 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         <div :class="['filter-tag', orderFilter === 4 ? 'active' : '']" @click="orderFilter = orderFilter === 4 ? null : 4">已退款</div>
       </div>
       <div v-if="!filteredOrders.length" class="empty-state">暂无订单</div>
-      <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
+      <div v-for="(o, index) in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
+        <div class="order-card-index">{{ String(index + 1).padStart(2, '0') }}</div>
         <div class="row-between">
           <span class="title-white">{{ o.good_title || '商品' }}</span>
           <span :class="['order-status', statusClass(o.status)]">{{ statusText(o.status) }}</span>
         </div>
-        <div class="order-summary-text">
-          {{ o.phone }} · {{ o.appointment_time }}
-        </div>
+        <div class="order-summary-text">{{ o.good_duration ? o.good_duration + ' 分钟疗程' : '服务预约' }}</div>
         <div class="order-price">¥{{ formatPrice(o.total_fee) }}</div>
+        <div class="order-card-meta-grid">
+          <div>
+            <div class="order-card-meta-label">预约时间</div>
+            <div class="order-card-meta-value">{{ o.appointment_time || '待确认' }}</div>
+          </div>
+          <div>
+            <div class="order-card-meta-label">联系电话</div>
+            <div class="order-card-meta-value">{{ o.phone || '未填写' }}</div>
+          </div>
+        </div>
       </div>
     </div>
     <!-- 订单详情视图 -->
-    <div v-if="currentOrder" style="padding-bottom:60px;">
+    <div v-if="currentOrder" class="order-detail-shell">
       <div class="detail-header">
         <span class="back-arrow" @click="closeOrderDetail">‹</span>
         <span class="title-white">订单详情</span>
         <span :class="['order-status', statusClass(currentOrder.status)]" style="margin-left:auto;">{{ statusText(currentOrder.status) }}</span>
       </div>
+      <div class="order-detail-facts detail-facts-wrap">
+        <div class="order-detail-fact">
+          <div class="order-detail-fact-label">订单编号</div>
+          <div class="order-detail-fact-value">{{ currentOrder.id }}</div>
+        </div>
+        <div class="order-detail-fact">
+          <div class="order-detail-fact-label">下单状态</div>
+          <div class="order-detail-fact-value">{{ statusText(currentOrder.status) }}</div>
+        </div>
+      </div>
       <!-- 商品信息 -->
       <div class="order-good-card" @click="viewOrderGood(currentOrder)">
-        <img v-if="currentOrder.good_img_url" :src="currentOrder.good_img_url" style="width:70px;height:70px;border-radius:8px;object-fit:cover;flex-shrink:0;">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:15px;font-weight:600;color:#ffffff;">{{ currentOrder.good_title || '商品' }}</div>
-          <div style="font-size:13px;color:#787890;margin-top:2px;">{{ currentOrder.good_duration }}分钟</div>
-          <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px;">
-            <span style="color:#c9a96e;font-size:16px;font-weight:700;">¥{{ formatPrice(currentOrder.total_fee) }}</span>
+        <img v-if="currentOrder.good_img_url" :src="currentOrder.good_img_url" class="thumb-70">
+        <div class="content-grow min">
+          <div class="title-white title-15">{{ currentOrder.good_title || '商品' }}</div>
+          <div class="meta-13 top-gap" style="color:var(--text-secondary);">{{ currentOrder.good_duration }}分钟</div>
+          <div class="price-row">
+            <span class="metric-price">¥{{ formatPrice(currentOrder.total_fee) }}</span>
           </div>
         </div>
-        <span style="color:#c9a96e;align-self:center;font-size:14px;">›</span>
+        <span class="chevron-inline">›</span>
       </div>
       <!-- 预约信息 -->
       <div class="appt-info">
-        <div style="font-size:13px;"><span class="label">手机号：</span><span class="value">{{ currentOrder.phone }}</span></div>
-        <div style="font-size:13px;margin-top:4px;"><span class="label">预约时间：</span><span class="value">{{ currentOrder.appointment_time }}</span></div>
-        <div v-if="currentOrder.quantity > 1" style="font-size:13px;margin-top:4px;"><span class="label">数量：</span><span class="value">{{ currentOrder.quantity }}</span></div>
+        <div class="appt-row"><span class="label">手机号：</span><span class="value">{{ currentOrder.phone }}</span></div>
+        <div class="appt-row"><span class="label">预约时间：</span><span class="value">{{ currentOrder.appointment_time }}</span></div>
+        <div v-if="currentOrder.quantity > 1" class="appt-row"><span class="label">数量：</span><span class="value">{{ currentOrder.quantity }}</span></div>
       </div>
       <!-- 操作按钮 -->
-      <div style="padding:0 10px;margin-top:12px;display:flex;gap:8px;">
+      <div class="action-bar top-spaced">
         <van-button block round type="primary" plain size="small" @click="contactAboutOrder(currentOrder)">联系商家</van-button>
         <van-button
           v-if="[1,2].includes(currentOrder.status)"
@@ -262,40 +1024,47 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 
   <!-- 消息Tab -->
   <div v-show="activeTab === 2" class="chat-wrap">
-    <div class="detail-header">
-      <span class="title-white">{{ conversation?.default_merchant_contact?.name || '联系商家' }}</span>
-      <div style="margin-left:auto;display:flex;gap:8px;">
-        <van-button size="mini" plain @click="showContactPicker = true">切换客服</van-button>
-        <van-button size="mini" type="primary" @click="showOrderPicker = true">发送订单</van-button>
+    <div class="message-shell">
+      <div class="detail-header">
+        <span class="title-white">{{ conversation?.default_merchant_contact?.name || '联系商家' }}</span>
+        <div class="header-actions">
+          <van-button size="mini" plain @click="showContactPicker = true">切换商家</van-button>
+          <van-button size="mini" type="primary" @click="showOrderPicker = true">发送订单</van-button>
+        </div>
       </div>
-    </div>
-    <div class="chat-messages" ref="conversationBox">
-      <div v-if="!conversationMessages.length" class="empty-state" style="padding:40px 0;">暂无消息</div>
-      <template v-for="m in conversationMessages" :key="m.id">
-        <div
-          v-if="m.message_type === 'text'"
-          :class="['bubble', 'chat-bubble-col', m.sender_role === user.role ? 'bubble-right' : 'bubble-left']"
-        >
-          <div v-if="m.sender_role !== user.role" class="bubble-role">{{ m.merchant_contact_name || roleLabel(m.sender_role) }}</div>
-          <div>{{ m.content }}</div>
-          <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
+      <div class="chat-messages" ref="conversationBox">
+        <div class="message-stream">
+          <div v-if="!conversationMessages.length" class="empty-state compact">暂无消息</div>
+          <template v-for="m in conversationMessages" :key="m.id">
+            <div
+              v-if="m.message_type === 'text'"
+              :class="['bubble', 'chat-bubble-col', m.sender_role === user.role ? 'bubble-right' : 'bubble-left']"
+            >
+              <div v-if="m.sender_role !== user.role" class="bubble-role">{{ m.merchant_contact_name || roleLabel(m.sender_role) }}</div>
+              <div>{{ m.content }}</div>
+              <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
+            </div>
+            <div
+              v-else
+              :class="['bubble', 'chat-bubble-col', m.sender_role === user.role ? 'bubble-right' : 'bubble-left']"
+            >
+              <div v-if="m.sender_role !== user.role" class="bubble-role">{{ m.merchant_contact_name || roleLabel(m.sender_role) }}</div>
+              <div class="bubble-order-card">
+                <div class="bubble-order-number">Order Card</div>
+                <div class="bubble-order-title">{{ m.payload?.good_title || '商品' }}</div>
+                <div class="bubble-order-meta">订单号 {{ m.order_id.slice(-8) }}</div>
+                <div class="bubble-order-meta">预约：{{ m.payload?.appointment_time || '未预约' }}</div>
+                <div class="bubble-order-meta">金额：¥{{ formatPrice(m.payload?.total_fee || 0) }}</div>
+              </div>
+              <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
+            </div>
+          </template>
         </div>
-        <div
-          v-else
-          :class="['bubble', 'chat-bubble-col', m.sender_role === user.role ? 'bubble-right' : 'bubble-left']"
-        >
-          <div v-if="m.sender_role !== user.role" class="bubble-role">{{ m.merchant_contact_name || roleLabel(m.sender_role) }}</div>
-          <div style="font-weight:600;">[订单] {{ m.payload?.good_title || '商品' }}</div>
-          <div style="font-size:12px;margin-top:4px;">订单号 {{ m.order_id.slice(-8) }}</div>
-          <div style="font-size:12px;">预约：{{ m.payload?.appointment_time || '未预约' }}</div>
-          <div style="font-size:12px;">金额：¥{{ formatPrice(m.payload?.total_fee || 0) }}</div>
-          <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
-        </div>
-      </template>
-    </div>
-    <div class="chat-input-bar">
-      <input v-model="conversationInput" placeholder="输入消息..." @keyup.enter="sendConversationText">
-      <button @click="sendConversationText">发送</button>
+      </div>
+      <div class="chat-input-bar">
+        <input v-model="conversationInput" placeholder="输入消息..." @keyup.enter="sendConversationText">
+        <button @click="sendConversationText">发送</button>
+      </div>
     </div>
   </div>
 
@@ -322,52 +1091,73 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     </div>
     <!-- 快捷功能 -->
     <van-cell-group inset style="margin-top:12px;">
-      <van-cell title="联系商家" is-link @click="openGeneralConversation" />
+      <van-cell title="联系商家" is-link @click="openGeneralConversation"></van-cell>
     </van-cell-group>
   </div>
 
   <!-- 商品详情弹窗 -->
   <van-popup v-model:show="showDetail" position="bottom" round :style="{ minHeight: '70%' }">
-    <div class="detail-popup" style="max-height:85vh;overflow-y:auto;">
-      <div v-if="detailGood" style="padding-bottom:80px;">
-        <img :src="detailGood.img_url" style="width:100%;max-height:300px;object-fit:cover;">
-        <div style="padding:16px;">
+    <div class="detail-popup detail-popup-shell">
+      <div v-if="detailGood" class="detail-shell">
+        <div class="detail-media">
+          <img :src="detailGood.img_url" :alt="detailGood.title">
+          <div class="detail-media-caption">Service Detail</div>
+        </div>
+        <div class="detail-body">
+          <div class="page-kicker">Curated Session</div>
           <div class="detail-title">{{ detailGood.title }}</div>
-          <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;">
-            <span class="detail-price">¥{{ formatPrice(detailGood.price) }}</span>
-            <span v-if="detailGood.original_price" class="detail-original">¥{{ formatPrice(detailGood.original_price) }}</span>
-            <span class="detail-meta" style="margin-left:auto;">已售 {{ detailGood.sales || 0 }} · {{ detailGood.duration }}分钟</span>
+          <div class="detail-summary">
+            <div class="detail-price-wrap">
+              <span class="detail-price">¥{{ formatPrice(detailGood.price) }}</span>
+              <span v-if="detailGood.original_price" class="detail-original">¥{{ formatPrice(detailGood.original_price) }}</span>
+            </div>
+            <span class="detail-meta">已售 {{ detailGood.sales || 0 }} · {{ detailGood.duration }}分钟</span>
           </div>
-          <div class="detail-desc" style="margin-top:16px;">{{ detailGood.description }}</div>
-          <div v-if="detailImages.length" style="margin-top:16px;">
-            <div v-for="(img, i) in detailImages" :key="i" style="margin-bottom:8px;">
+          <div class="detail-lead">{{ detailGood.description || '以更安静的节奏呈现服务本身，让阅读与选择都不被多余效果打断。' }}</div>
+          <div class="detail-facts">
+            <div class="detail-fact">
+              <div class="detail-fact-label">时长</div>
+              <div class="detail-fact-value">{{ detailGood.duration }} 分钟</div>
+            </div>
+            <div class="detail-fact">
+              <div class="detail-fact-label">当前价格</div>
+              <div class="detail-fact-value">¥{{ formatPrice(detailGood.price) }}</div>
+            </div>
+            <div class="detail-fact">
+              <div class="detail-fact-label">累计预约</div>
+              <div class="detail-fact-value">{{ detailGood.sales || 0 }} 次</div>
+            </div>
+          </div>
+          <div v-if="detailImages.length" class="detail-gallery">
+            <div class="detail-gallery-label">Service Gallery</div>
+            <div v-for="(img, i) in detailImages" :key="i" class="detail-gallery-item">
               <img :src="img" class="detail-img" @click="previewImage(i)">
             </div>
           </div>
         </div>
-        <div class="detail-cta" style="display:flex;gap:10px;">
-          <van-button style="flex:1;" round plain @click="showDetail=false; openGeneralConversation()">联系商家</van-button>
-          <van-button type="primary" style="flex:2;" round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ formatPrice(detailGood.price) }}</van-button>
+        <div class="detail-cta detail-cta-actions">
+          <van-button class="btn-flex-1" round plain @click="showDetail=false; openGeneralConversation()">联系商家</van-button>
+          <van-button type="primary" class="btn-flex-2" round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ formatPrice(detailGood.price) }}</van-button>
         </div>
       </div>
     </div>
   </van-popup>
 
   <van-popup v-model:show="showContactPicker" position="bottom" round>
-    <div style="padding:20px;">
-      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:12px;">选择客服</div>
-      <div v-if="!merchantContacts.length" class="empty-state" style="padding:20px 0;">暂无可用客服</div>
+    <div class="popup-panel">
+      <div class="popup-title">选择商家</div>
+      <div v-if="!merchantContacts.length" class="popup-empty">暂无可用商家</div>
       <div v-for="contact in merchantContacts" :key="contact.id" class="order-card" @click="switchMerchantContact(contact)">
         <div class="title-white">{{ contact.name }}</div>
-        <div class="single-line-preview">微信：{{ contact.wechat || '未填' }} · 手机：{{ contact.phone || '未填' }}</div>
+        <div class="single-line-preview">手机号：{{ contact.phone || '未填' }}</div>
       </div>
     </div>
   </van-popup>
 
   <van-popup v-model:show="showOrderPicker" position="bottom" round>
-    <div style="padding:20px;max-height:60vh;overflow-y:auto;">
-      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:12px;">选择订单</div>
-      <div v-if="!selectedOrderList.length" class="empty-state" style="padding:20px 0;">暂无可发送订单</div>
+    <div class="popup-panel scrollable">
+      <div class="popup-title">选择订单</div>
+      <div v-if="!selectedOrderList.length" class="popup-empty">暂无可发送订单</div>
       <div v-for="order in selectedOrderList" :key="order.id" class="order-card" @click="sendOrderCard(order)">
         <div class="row-between">
           <span class="title-white">{{ order.good_title }}</span>
@@ -381,39 +1171,27 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 
   <!-- 下单弹窗 -->
   <van-popup v-model:show="showBook" position="bottom" round :style="{ minHeight: '50%' }">
-    <div class="book-popup" style="padding:20px;">
-      <div style="font-size:16px;font-weight:600;margin-bottom:16px;color:#ffffff;">下单 {{ bookGood?.title }}</div>
-      <div style="margin-bottom:12px;">
-        <div style="font-size:13px;color:#b0b0c0;margin-bottom:4px;">手机号 *</div>
+    <div class="book-popup book-panel">
+      <div class="book-title">下单 {{ bookGood?.title }}</div>
+      <div class="book-block">
+        <div class="book-label" style="margin-bottom:4px;">手机号 *</div>
         <input v-model="bookForm.phone" type="tel" placeholder="请输入手机号">
       </div>
-      <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-size:13px;color:#b0b0c0;">数量</span>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div @click="bookForm.quantity = Math.max(1, bookForm.quantity - 1)" style="width:28px;height:28px;border-radius:14px;border:1px solid #3a3a5c;display:flex;align-items:center;justify-content:center;color:#b0b0c0;font-size:16px;cursor:pointer;">-</div>
-          <span style="font-size:16px;font-weight:600;color:#ffffff;min-width:20px;text-align:center;">{{ bookForm.quantity }}</span>
-          <div @click="bookForm.quantity++" style="width:28px;height:28px;border-radius:14px;border:1px solid #3a3a5c;display:flex;align-items:center;justify-content:center;color:#b0b0c0;font-size:16px;cursor:pointer;">+</div>
+      <div class="book-block book-row-between">
+        <span class="book-label" style="margin-bottom:0;">数量</span>
+        <div class="book-stepper-row">
+          <div @click="bookForm.quantity = Math.max(1, bookForm.quantity - 1)" class="book-stepper">-</div>
+          <span class="book-qty">{{ bookForm.quantity }}</span>
+          <div @click="bookForm.quantity++" class="book-stepper">+</div>
         </div>
       </div>
-      <div style="margin-bottom:12px;">
-        <div style="font-size:13px;color:#b0b0c0;margin-bottom:6px;">选择日期 *</div>
-        <div style="display:flex;gap:8px;">
-          <div v-for="d in dateOptions" :key="d.value" @click="bookForm.date=d.value"
-               :style="{flex:1,textAlign:'center',padding:'10px 0',borderRadius:8,border: bookForm.date===d.value?'2px solid #c9a96e':'1px solid #3a3a5c',color:bookForm.date===d.value?'#c9a96e':'#b0b0c0',fontWeight:bookForm.date===d.value?600:400,fontSize:13,cursor:'pointer',background:bookForm.date===d.value?'rgba(201,169,110,.1)':'transparent'}">
-            {{ d.label }}
-          </div>
+      <div class="book-block double">
+        <div class="book-col">
+          <div class="book-label">预计到店时间 *</div>
+          <input v-model="bookForm.arrivalAt" type="datetime-local" :min="bookMinArrival">
         </div>
       </div>
-      <div style="margin-bottom:16px;">
-        <div style="font-size:13px;color:#b0b0c0;margin-bottom:6px;">选择时段 *</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;">
-          <div v-for="s in timeSlots" :key="s" @click="bookForm.timeSlot=s"
-               :style="{padding:'8px 14px',borderRadius:8,border:bookForm.timeSlot===s?'2px solid #c9a96e':'1px solid #3a3a5c',color:bookForm.timeSlot===s?'#c9a96e':'#b0b0c0',fontWeight:bookForm.timeSlot===s?600:400,fontSize:13,cursor:'pointer',background:bookForm.timeSlot===s?'rgba(201,169,110,.1)':'transparent'}">
-            {{ s }}
-          </div>
-        </div>
-      </div>
-      <van-button type="primary" block round @click="submitOrder" :loading="submitting" :disabled="!bookForm.phone || !bookForm.timeSlot">
+      <van-button type="primary" block round @click="submitOrder" :loading="submitting" :disabled="!bookForm.phone || !bookForm.arrivalAt">
         确认下单 · ¥{{ formatPrice((bookGood?.price||0) * bookForm.quantity) }}
       </van-button>
     </div>
@@ -509,7 +1287,7 @@ const app = createApp({
 
     const showBook = ref(false);
     const bookGood = ref(null);
-    const bookForm = ref({ phone: '', date: '', timeSlot: '', quantity: 1 });
+    const bookForm = ref({ phone: '', arrivalAt: '', quantity: 1 });
     const showDetail = ref(false);
     const detailGood = ref(null);
     const detailImages = ref([]);
@@ -523,8 +1301,7 @@ const app = createApp({
     const showContactPicker = ref(false);
     const showOrderPicker = ref(false);
 
-    const timeSlots = ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00','19:00-20:00','20:00-21:00'];
-    const dateOptions = ref([]);
+    const bookMinArrival = ref('');
     const orderFilter = ref(null);
 
     const unreadCount = computed(() => conversation.value?.unread_count || 0);
@@ -570,21 +1347,26 @@ const app = createApp({
       return res.json();
     }
 
-    function initDateOptions() {
-      const today = new Date();
-      const options = [];
-      for (let i = 0; i < 3; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() + i);
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
-        const value = `${d.getFullYear()}-${mm}-${dd}`;
-        const label = i === 0 ? `今天 ${mm}/${dd}` : i === 1 ? `明天 ${mm}/${dd}` : `${weekday} ${mm}/${dd}`;
-        options.push({ value, label });
+    function toDateTimeLocalValue(date) {
+      const pad = n => String(n).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function nextArrivalTimeValue() {
+      const date = new Date();
+      date.setMinutes(date.getMinutes() + 60);
+      date.setSeconds(0, 0);
+      const minutes = date.getMinutes();
+      if (minutes > 0 && minutes <= 30) {
+        date.setMinutes(30);
+      } else if (minutes > 30) {
+        date.setHours(date.getHours() + 1, 0, 0, 0);
       }
-      dateOptions.value = options;
-      bookForm.value.date = options[0]?.value || '';
+      return toDateTimeLocalValue(date);
+    }
+
+    function formatArrivalTime(value) {
+      return value ? value.replace('T', ' ') : '';
     }
 
     function goToOrders(status) {
@@ -643,29 +1425,37 @@ const app = createApp({
 
     async function sendConversationText() {
       if (!conversationInput.value.trim()) return;
-      const sent = await api('/conversation/messages', {
-        method: 'POST',
-        body: JSON.stringify({ message_type: 'text', content: conversationInput.value }),
-      });
-      conversationInput.value = '';
-      conversationMessages.value.push(sent);
-      await loadConversationSummary();
-      await nextTick();
-      scrollConversationToBottom(true);
+      try {
+        const sent = await api('/conversation/messages', {
+          method: 'POST',
+          body: JSON.stringify({ message_type: 'text', content: conversationInput.value }),
+        });
+        conversationInput.value = '';
+        conversationMessages.value.push(sent);
+        await loadConversationSummary();
+        await nextTick();
+        scrollConversationToBottom(true);
+      } catch (e) {
+        vant.showToast((e.message || '发送失败').replace(/^Error:\s*/, ''));
+      }
     }
 
     async function sendOrderCard(order) {
       await ensureConversationLoaded();
-      const sent = await api('/conversation/messages', {
-        method: 'POST',
-        body: JSON.stringify({ message_type: 'order_card', order_id: order.id }),
-      });
-      conversationMessages.value.push(sent);
-      showOrderPicker.value = false;
-      activeTab.value = 2;
-      await loadConversationSummary();
-      await nextTick();
-      scrollConversationToBottom(true);
+      try {
+        const sent = await api('/conversation/messages', {
+          method: 'POST',
+          body: JSON.stringify({ message_type: 'order_card', order_id: order.id }),
+        });
+        conversationMessages.value.push(sent);
+        showOrderPicker.value = false;
+        activeTab.value = 2;
+        await loadConversationSummary();
+        await nextTick();
+        scrollConversationToBottom(true);
+      } catch (e) {
+        vant.showToast((e.message || '发送失败').replace(/^Error:\s*/, ''));
+      }
     }
 
     async function switchMerchantContact(contact) {
@@ -739,8 +1529,9 @@ const app = createApp({
 
     function openBook(good) {
       bookGood.value = good;
-      initDateOptions();
-      bookForm.value = { phone: '', date: dateOptions.value[0]?.value || '', timeSlot: '', quantity: 1 };
+      const defaultArrival = nextArrivalTimeValue();
+      bookMinArrival.value = defaultArrival;
+      bookForm.value = { phone: '', arrivalAt: defaultArrival, quantity: 1 };
       showBook.value = true;
     }
 
@@ -760,7 +1551,7 @@ const app = createApp({
             phone: bookForm.value.phone,
             address: '',
             quantity: bookForm.value.quantity,
-            appointment_time: `${bookForm.value.date} ${bookForm.value.timeSlot}`,
+            appointment_time: formatArrivalTime(bookForm.value.arrivalAt),
           }),
         });
 
@@ -868,7 +1659,7 @@ const app = createApp({
     }
 
     function statusColor(status) {
-      return { 0: '#787890', 1: '#d4a03c', 2: '#07c160', 3: '#e6a23c', 4: '#c0564a' }[status] ?? '#787890';
+      return { 0: '#7d786f', 1: '#877252', 2: '#556a61', 3: '#7f7153', 4: '#8d635a' }[status] ?? '#7d786f';
     }
 
     function statusClass(status) {
@@ -974,8 +1765,7 @@ const app = createApp({
       merchantContacts,
       showContactPicker,
       showOrderPicker,
-      timeSlots,
-      dateOptions,
+      bookMinArrival,
       orderStats,
       orderFilter,
       filteredOrders,

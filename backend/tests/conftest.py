@@ -13,7 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
 import database as database_module
 import main as main_module
 from database import Base
-from models import Good, MerchantContact, Role, User
+from models import Good, Role, User
 
 
 @pytest_asyncio.fixture
@@ -53,10 +53,16 @@ async def seeded_session(session_factory):
             phone="13800000000",
         )
         merchant = User(
-            openid="test_merchant",
+            openid="test_merchant_a",
             role=Role.MERCHANT,
-            nickname="Test Merchant",
+            nickname="商家A",
             phone="13900000001",
+        )
+        merchant_b = User(
+            openid="test_merchant_b",
+            role=Role.MERCHANT,
+            nickname="商家B",
+            phone="13900000002",
         )
         good = Good(
             title="Seeded Massage",
@@ -68,34 +74,20 @@ async def seeded_session(session_factory):
             sales=0,
             detail_images='["/static/detail-1.jpg"]',
         )
-        merchant_contact_a = MerchantContact(
-            name="客服A",
-            wechat="service_a",
-            phone="13900000001",
-            is_active=True,
-            sort_order=10,
-        )
-        merchant_contact_b = MerchantContact(
-            name="客服B",
-            wechat="service_b",
-            phone="13900000002",
-            is_active=True,
-            sort_order=20,
-        )
 
-        session.add_all([customer, merchant, good, merchant_contact_a, merchant_contact_b])
+        session.add_all([customer, merchant, merchant_b, good])
         await session.commit()
         await session.refresh(customer)
         await session.refresh(merchant)
+        await session.refresh(merchant_b)
         await session.refresh(good)
-        await session.refresh(merchant_contact_a)
-        await session.refresh(merchant_contact_b)
 
         session.info["seeded_data"] = {
             "customer": customer,
             "merchant": merchant,
+            "merchant_b": merchant_b,
             "good": good,
-            "merchant_contacts": [merchant_contact_a, merchant_contact_b],
+            "merchant_contacts": [merchant, merchant_b],
         }
         yield session
 

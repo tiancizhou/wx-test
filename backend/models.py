@@ -91,13 +91,13 @@ class Conversation(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
     default_merchant_contact_id: Mapped[int | None] = mapped_column(
-        ForeignKey("merchant_contacts.id"),
+        ForeignKey("users.id"),
         nullable=True,
     )
     create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
 
-    customer: Mapped["User"] = relationship()
-    default_merchant_contact: Mapped["MerchantContact | None"] = relationship()
+    customer: Mapped["User"] = relationship(foreign_keys=[customer_id])
+    default_merchant_contact: Mapped["User | None"] = relationship(foreign_keys=[default_merchant_contact_id])
 
 
 class ConversationMessage(Base):
@@ -107,14 +107,14 @@ class ConversationMessage(Base):
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"), index=True)
     sender_id: Mapped[int] = mapped_column(Integer)
     sender_role: Mapped[str] = mapped_column(String(16))
-    merchant_contact_id: Mapped[int | None] = mapped_column(ForeignKey("merchant_contacts.id"), nullable=True)
+    merchant_contact_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     message_type: Mapped[str] = mapped_column(String(16), default="text")
     content: Mapped[str] = mapped_column(Text, default="")
     order_id: Mapped[str] = mapped_column(String(32), default="")
     payload_json: Mapped[str] = mapped_column(Text, default="")
     create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
 
-    merchant_contact: Mapped["MerchantContact | None"] = relationship()
+    merchant_contact: Mapped["User | None"] = relationship(foreign_keys=[merchant_contact_id])
 
 
 class ConversationReadState(Base):

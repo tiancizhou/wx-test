@@ -62,7 +62,7 @@ async def test_merchant_can_reply_and_mark_read(
     )
     assert reply.status_code == 200
     assert reply.json()["sender_role"] == "MERCHANT"
-    assert reply.json()["merchant_contact_name"] == "客服A"
+    assert reply.json()["merchant_contact_name"] == "商家A"
 
     read = await client.post(
         f"/merchant/conversations/{conversation_id}/read",
@@ -109,7 +109,7 @@ async def test_merchant_can_send_order_card_for_current_customer(
     assert body["message_type"] == "order_card"
     assert body["order_id"] == order.id
     assert body["payload"]["good_title"] == seeded_good.title
-    assert body["merchant_contact_name"] == "客服A"
+    assert body["merchant_contact_name"] == "商家A"
 
 
 @pytest.mark.asyncio

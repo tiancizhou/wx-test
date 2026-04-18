@@ -17,7 +17,7 @@ async def test_get_conversation_auto_creates_customer_conversation(
     body = response.json()
     assert body["customer_id"] == customer_user.id
     assert body["unread_count"] == 0
-    assert body["default_merchant_contact"]["name"] == "客服A"
+    assert body["default_merchant_contact"]["name"] == "商家A"
 
     conversation = (
         await seeded_session.execute(
@@ -94,12 +94,12 @@ async def test_customer_can_switch_default_contact_and_mark_read(
 
     sent = await client.post(
         "/conversation/messages",
-        json={"message_type": "text", "content": "改由客服B接待"},
+        json={"message_type": "text", "content": "改由商家B接待"},
         headers=auth_headers,
     )
     assert sent.status_code == 200
     assert sent.json()["merchant_contact_id"] == merchant_contacts[1].id
-    assert sent.json()["merchant_contact_name"] == merchant_contacts[1].name
+    assert sent.json()["merchant_contact_name"] == merchant_contacts[1].nickname
 
     read_response = await client.post(
         "/conversation/read",
@@ -120,11 +120,11 @@ async def test_message_level_contact_name_is_preserved_after_switching_default_c
 
     first = await client.post(
         "/conversation/messages",
-        json={"message_type": "text", "content": "先由客服A处理"},
+        json={"message_type": "text", "content": "先由商家A处理"},
         headers=auth_headers,
     )
     assert first.status_code == 200
-    assert first.json()["merchant_contact_name"] == merchant_contacts[0].name
+    assert first.json()["merchant_contact_name"] == merchant_contacts[0].nickname
 
     switched = await client.post(
         "/conversation/default-contact",
@@ -135,16 +135,40 @@ async def test_message_level_contact_name_is_preserved_after_switching_default_c
 
     second = await client.post(
         "/conversation/messages",
-        json={"message_type": "text", "content": "再由客服B处理"},
+        json={"message_type": "text", "content": "再由商家B处理"},
         headers=auth_headers,
     )
     assert second.status_code == 200
-    assert second.json()["merchant_contact_name"] == merchant_contacts[1].name
+    assert second.json()["merchant_contact_name"] == merchant_contacts[1].nickname
 
     messages = await client.get("/conversation/messages?after_id=0", headers=auth_headers)
     assert messages.status_code == 200
     body = messages.json()
     assert [item["merchant_contact_name"] for item in body] == [
-        merchant_contacts[0].name,
-        merchant_contacts[1].name,
+        merchant_contacts[0].nickname,
+        merchant_contacts[1].nickname,
     ]
+
+
+@pytest.mark.asyncio
+async def test_customer_cannot_send_message_when_no_active_merchant_contact(
+    client,
+    seeded_session,
+    auth_headers,
+    merchant_contacts,
+):
+    for contact in merchant_contacts:
+        contact.role = "CUSTOMER"
+    await seeded_session.commit()
+
+    summary = await client.get("/conversation", headers=auth_headers)
+    assert summary.status_code == 200
+    assert summary.json()["default_merchant_contact"] is None
+
+    response = await client.post(
+        "/conversation/messages",
+        json={"message_type": "text", "content": "还有人在吗"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert response.json() == {"detail": "暂无可用商家"}

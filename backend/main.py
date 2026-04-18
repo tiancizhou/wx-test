@@ -22,7 +22,6 @@ from models import (
     Good,
     Order,
     OrderStatus,
-    MerchantContact,
     Conversation,
     ConversationMessage,
     ConversationReadState,
@@ -38,8 +37,6 @@ from schemas import (
     UserCreate,
     UserUpdate,
     MerchantContactOut,
-    MerchantContactCreate,
-    MerchantContactUpdate,
     ConversationSummaryOut,
     ConversationMessageCreate,
     ConversationMessageOut,
@@ -325,16 +322,25 @@ async def upload_image(
 # 会话访问权限校验
 # ============================================================
 
-def _contact_to_out(contact: MerchantContact | None) -> dict | None:
+def _merchant_display_name(user: User | None) -> str:
+    if not user:
+        return ""
+    nickname = (user.nickname or "").strip()
+    if nickname:
+        return nickname
+    return f"商家 #{user.id}"
+
+
+def _contact_to_out(contact: User | None) -> dict | None:
     if not contact:
         return None
     return {
         "id": contact.id,
-        "name": contact.name,
-        "wechat": contact.wechat,
-        "phone": contact.phone,
-        "is_active": contact.is_active,
-        "sort_order": contact.sort_order,
+        "name": _merchant_display_name(contact),
+        "wechat": "",
+        "phone": contact.phone or "",
+        "is_active": contact.role == Role.MERCHANT,
+        "sort_order": 0,
     }
 
 
@@ -351,11 +357,11 @@ def _message_preview(message: ConversationMessage | None) -> str:
     return (message.content or "")[:50]
 
 
-async def _first_active_contact(db: AsyncSession) -> MerchantContact | None:
+async def _first_active_contact(db: AsyncSession) -> User | None:
     result = await db.execute(
-        select(MerchantContact)
-        .where(MerchantContact.is_active == True)
-        .order_by(MerchantContact.sort_order.asc(), MerchantContact.id.asc())
+        select(User)
+        .where(User.role == Role.MERCHANT)
+        .order_by(User.id.asc())
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -364,9 +370,9 @@ async def _first_active_contact(db: AsyncSession) -> MerchantContact | None:
 async def _ensure_default_contact(
     conversation: Conversation,
     db: AsyncSession,
-) -> MerchantContact | None:
+) -> User | None:
     contact = conversation.default_merchant_contact
-    if contact and contact.is_active:
+    if contact and contact.role == Role.MERCHANT:
         return contact
 
     fallback = await _first_active_contact(db)
@@ -376,6 +382,30 @@ async def _ensure_default_contact(
         await db.commit()
     conversation.default_merchant_contact = fallback
     return fallback
+
+
+async def _resolve_message_contact(
+    conversation: Conversation,
+    requested_contact_id: int | None,
+    db: AsyncSession,
+) -> User:
+    contact = conversation.default_merchant_contact
+    if requested_contact_id is not None:
+        result = await db.execute(
+            select(User).where(
+                User.id == requested_contact_id,
+                User.role == Role.MERCHANT,
+            )
+        )
+        contact = result.scalar_one_or_none()
+        if not contact:
+            raise HTTPException(400, "商家不存在")
+    elif not contact or contact.role != Role.MERCHANT:
+        contact = await _first_active_contact(db)
+
+    if not contact:
+        raise HTTPException(400, "暂无可用商家")
+    return contact
 
 
 async def _get_or_create_customer_conversation(user: User, db: AsyncSession) -> Conversation:
@@ -438,7 +468,7 @@ def _message_to_out(message: ConversationMessage) -> dict:
         "sender_id": message.sender_id,
         "sender_role": message.sender_role,
         "merchant_contact_id": message.merchant_contact_id,
-        "merchant_contact_name": message.merchant_contact.name if message.merchant_contact else "",
+        "merchant_contact_name": _merchant_display_name(message.merchant_contact),
         "message_type": message.message_type,
         "content": message.content,
         "order_id": message.order_id,
@@ -977,11 +1007,11 @@ async def pending_orders(
 @app.get("/merchant-contacts", response_model=list[MerchantContactOut])
 async def get_merchant_contacts(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(MerchantContact)
-        .where(MerchantContact.is_active == True)
-        .order_by(MerchantContact.sort_order.asc(), MerchantContact.id.asc())
+        select(User)
+        .where(User.role == Role.MERCHANT)
+        .order_by(User.id.asc())
     )
-    return result.scalars().all()
+    return [_contact_to_out(item) for item in result.scalars().all()]
 
 
 @app.get("/conversation", response_model=ConversationSummaryOut)
@@ -1019,14 +1049,7 @@ async def create_conversation_message(
     user: User = Depends(get_current_user),
 ):
     conversation = await _get_or_create_customer_conversation(user, db)
-    contact = conversation.default_merchant_contact
-    if data.merchant_contact_id is not None:
-        selected = await db.execute(select(MerchantContact).where(MerchantContact.id == data.merchant_contact_id))
-        contact = selected.scalar_one_or_none()
-        if not contact or not contact.is_active:
-            raise HTTPException(400, "客服不存在或已停用")
-    elif not contact:
-        contact = await _first_active_contact(db)
+    contact = await _resolve_message_contact(conversation, data.merchant_contact_id, db)
 
     payload_json = ""
     content = data.content.strip()
@@ -1062,10 +1085,15 @@ async def switch_default_contact(
     user: User = Depends(get_current_user),
 ):
     conversation = await _get_or_create_customer_conversation(user, db)
-    result = await db.execute(select(MerchantContact).where(MerchantContact.id == data.merchant_contact_id))
+    result = await db.execute(
+        select(User).where(
+            User.id == data.merchant_contact_id,
+            User.role == Role.MERCHANT,
+        )
+    )
     contact = result.scalar_one_or_none()
-    if not contact or not contact.is_active:
-        raise HTTPException(400, "客服不存在或已停用")
+    if not contact:
+        raise HTTPException(400, "商家不存在")
     conversation.default_merchant_contact_id = contact.id
     conversation.default_merchant_contact = contact
     await db.commit()
@@ -1151,14 +1179,7 @@ async def merchant_create_conversation_message(
     user: User = Depends(require_role(Role.MERCHANT)),
 ):
     conversation = await _load_conversation_for_merchant(conversation_id, db)
-    contact = conversation.default_merchant_contact
-    if data.merchant_contact_id is not None:
-        selected = await db.execute(select(MerchantContact).where(MerchantContact.id == data.merchant_contact_id))
-        contact = selected.scalar_one_or_none()
-        if not contact or not contact.is_active:
-            raise HTTPException(400, "客服不存在或已停用")
-    elif not contact:
-        contact = await _first_active_contact(db)
+    contact = await _resolve_message_contact(conversation, data.merchant_contact_id, db)
 
     if data.message_type == "order_card":
         order = await _verify_order_access(data.order_id, user, db)
@@ -1228,10 +1249,15 @@ async def merchant_switch_default_contact(
     user: User = Depends(require_role(Role.MERCHANT)),
 ):
     conversation = await _load_conversation_for_merchant(conversation_id, db)
-    result = await db.execute(select(MerchantContact).where(MerchantContact.id == data.merchant_contact_id))
+    result = await db.execute(
+        select(User).where(
+            User.id == data.merchant_contact_id,
+            User.role == Role.MERCHANT,
+        )
+    )
     contact = result.scalar_one_or_none()
-    if not contact or not contact.is_active:
-        raise HTTPException(400, "客服不存在或已停用")
+    if not contact:
+        raise HTTPException(400, "商家不存在")
     conversation.default_merchant_contact_id = contact.id
     conversation.default_merchant_contact = contact
     await db.commit()
@@ -1451,63 +1477,6 @@ async def admin_delete_user(
     await db.delete(user)
     await db.commit()
     return {"msg": "已删除"}
-
-
-@app.get("/admin/merchant-contacts", response_model=list[MerchantContactOut])
-async def admin_merchant_contacts(
-    db: AsyncSession = Depends(get_db),
-    _=Depends(verify_admin_key),
-):
-    result = await db.execute(
-        select(MerchantContact).order_by(MerchantContact.sort_order.asc(), MerchantContact.id.asc())
-    )
-    return result.scalars().all()
-
-
-@app.post("/admin/merchant-contacts", response_model=MerchantContactOut)
-async def create_merchant_contact(
-    data: MerchantContactCreate,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(verify_admin_key),
-):
-    contact = MerchantContact(**data.model_dump())
-    db.add(contact)
-    await db.commit()
-    await db.refresh(contact)
-    return contact
-
-
-@app.put("/admin/merchant-contacts/{contact_id}", response_model=MerchantContactOut)
-async def update_merchant_contact(
-    contact_id: int,
-    data: MerchantContactUpdate,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(verify_admin_key),
-):
-    result = await db.execute(select(MerchantContact).where(MerchantContact.id == contact_id))
-    contact = result.scalar_one_or_none()
-    if not contact:
-        raise HTTPException(404, "客服不存在")
-    for key, value in data.model_dump(exclude_unset=True).items():
-        setattr(contact, key, value)
-    await db.commit()
-    await db.refresh(contact)
-    return contact
-
-
-@app.delete("/admin/merchant-contacts/{contact_id}")
-async def delete_merchant_contact(
-    contact_id: int,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(verify_admin_key),
-):
-    result = await db.execute(select(MerchantContact).where(MerchantContact.id == contact_id))
-    contact = result.scalar_one_or_none()
-    if not contact:
-        raise HTTPException(404, "客服不存在")
-    await db.delete(contact)
-    await db.commit()
-    return {"ok": True}
 
 
 # ============================================================

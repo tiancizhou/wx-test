@@ -2,34 +2,35 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_admin_can_create_update_and_delete_merchant_contacts(client, admin_headers):
+async def test_admin_can_create_update_and_delete_merchant_users(client, admin_headers):
     created = await client.post(
-        "/admin/merchant-contacts",
+        "/admin/users",
         json={
-            "name": "夜班客服",
-            "wechat": "night_shift",
+            "openid": "merchant_created_for_admin_test",
+            "nickname": "商家夜班",
             "phone": "13900000099",
-            "is_active": True,
-            "sort_order": 30,
+            "role": "MERCHANT",
         },
         headers=admin_headers,
     )
     assert created.status_code == 200
-    contact_id = created.json()["id"]
+    user_id = created.json()["id"]
+    assert created.json()["role"] == "MERCHANT"
 
-    listed = await client.get("/admin/merchant-contacts", headers=admin_headers)
+    listed = await client.get("/admin/users", headers=admin_headers)
     assert listed.status_code == 200
-    assert any(item["id"] == contact_id for item in listed.json())
+    merchants = [item for item in listed.json() if item["role"] == "MERCHANT"]
+    assert any(item["id"] == user_id for item in merchants)
 
     updated = await client.put(
-        f"/admin/merchant-contacts/{contact_id}",
-        json={"name": "夜班客服(调整)", "is_active": False},
+        f"/admin/users/{user_id}",
+        json={"nickname": "商家夜班(调整)", "phone": "13900000111", "role": "MERCHANT"},
         headers=admin_headers,
     )
     assert updated.status_code == 200
-    assert updated.json()["name"] == "夜班客服(调整)"
-    assert updated.json()["is_active"] is False
+    assert updated.json()["nickname"] == "商家夜班(调整)"
+    assert updated.json()["role"] == "MERCHANT"
 
-    deleted = await client.delete(f"/admin/merchant-contacts/{contact_id}", headers=admin_headers)
+    deleted = await client.delete(f"/admin/users/{user_id}", headers=admin_headers)
     assert deleted.status_code == 200
-    assert deleted.json() == {"ok": True}
+    assert deleted.json() == {"msg": "已删除"}
