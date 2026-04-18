@@ -1,2 +1,17 @@
 .worktrees/
 backend/.env
+
+# macOS
+.DS_Store
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local tool settings
+.claude/
+
+# Runtime-generated backend artifacts
+backend/massage.db
+backend/static/uploads/
+backend/uv.lock.local-backup
