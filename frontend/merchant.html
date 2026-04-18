@@ -8,9 +8,6 @@
 <meta http-equiv="Expires" content="0">
 <title>商家管理</title>
 <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
 <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
@@ -18,7 +15,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   background: #f6f2eb;
-  font-family: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 :root {
@@ -77,7 +74,7 @@ body {
   color: var(--text-title);
   font-size: 18px;
   font-weight: 600;
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
 }
 .metric-price.sm { font-size: 17px; }
 .metric-price.top-gap { margin-top: 4px; }
@@ -155,7 +152,7 @@ body {
   margin-bottom: 10px;
 }
 .hero-title {
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 30px;
   line-height: 1.28;
   color: var(--text-title);
@@ -286,7 +283,7 @@ body {
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 0 18px; }
 .stat-card { background: var(--bg-card); border-radius: 18px; padding: 16px; border: 1px solid rgba(216, 210, 198, 0.92); box-shadow: var(--shadow-soft); }
 .stat-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
-.stat-value { font-size: 28px; font-weight: 600; color: var(--text-title); font-family: "Noto Serif SC", serif; }
+.stat-value { font-size: 28px; font-weight: 600; color: var(--text-title); font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif; }
 .stat-value.small { font-size: 18px; }
 .stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
 .stats-hero {
@@ -295,7 +292,7 @@ body {
   margin-bottom: 14px;
 }
 .stats-title {
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 30px;
   line-height: 1.3;
   color: var(--text-title);
@@ -318,7 +315,7 @@ body {
   margin-bottom: 14px;
 }
 .goods-title {
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 30px;
   line-height: 1.3;
   color: var(--text-title);
@@ -577,7 +574,8 @@ body {
   <div v-show="activeTab === 1" class="page-section">
     <div v-if="!currentConversation">
       <div class="section-heading">客户会话</div>
-      <div v-if="!conversations.length" class="goods-empty">暂无会话</div>
+      <div v-if="conversationWorkspaceLoading && !conversations.length" class="goods-empty">加载中...</div>
+      <div v-else-if="!conversations.length" class="goods-empty">暂无会话</div>
       <div v-for="conv in conversations" :key="conv.conversation_id" class="order-card" @click="openConversation(conv)">
         <div class="row-between">
           <div class="inline-row-gap center content-grow min">
@@ -604,7 +602,8 @@ body {
         </div>
       </div>
       <div class="chat-messages" ref="chatBox">
-        <div v-if="!messages.length" class="popup-empty compact">暂无消息</div>
+        <div v-if="messagesLoading" class="popup-empty compact">加载中...</div>
+        <div v-else-if="!messages.length" class="popup-empty compact">暂无消息</div>
         <template v-for="m in messages" :key="m.id">
           <div v-if="m.message_type === 'text'"
                :class="['bubble', m.sender_role==='MERCHANT' ? 'bubble-right' : 'bubble-left']">
@@ -633,7 +632,8 @@ body {
   <van-popup v-model:show="showContactPicker" position="bottom" round>
     <div class="popup-panel">
       <div class="popup-title">切换接待人</div>
-      <div v-if="!merchantContacts.length" class="popup-empty">暂无可用商家</div>
+      <div v-if="merchantContactsLoading && !merchantContacts.length" class="popup-empty">加载中...</div>
+      <div v-else-if="!merchantContacts.length" class="popup-empty">暂无可用商家</div>
       <div v-for="contact in merchantContacts" :key="contact.id" class="order-card" @click="switchConversationContact(contact)">
         <div class="title-strong">{{ contact.name }}</div>
         <div class="conv-preview">手机号：{{ contact.phone || '未填' }}</div>
@@ -670,7 +670,8 @@ body {
         <van-button size="small" type="primary" icon="plus" @click="openCreateGood">创建商品</van-button>
       </div>
     </div>
-    <div v-if="!goods.length" class="goods-empty">暂无商品，点击右上角创建</div>
+    <div v-if="goodsLoading && !goods.length" class="goods-empty">加载中...</div>
+    <div v-else-if="!goods.length" class="goods-empty">暂无商品，点击右上角创建</div>
     <div v-for="(g, index) in goods" :key="g.id" class="good-card">
       <div class="good-card-top">
         <img :src="g.img_url || 'https://via.placeholder.com/80'" class="good-card-img" @error="$event.target.src='https://via.placeholder.com/80'">
@@ -924,17 +925,29 @@ const app = createApp({
     const activeTab = ref(0);
 
     const orders = ref([]);
+    const ordersLoaded = ref(false);
+    const ordersLoading = ref(false);
     const goods = ref([]);
+    const goodsLoaded = ref(false);
+    const goodsLoading = ref(false);
     const detailOrder = ref(null);
     const conversations = ref([]);
+    const conversationsLoaded = ref(false);
+    const conversationsLoading = ref(false);
     const currentConversation = ref(null);
     const messages = ref([]);
+    const messagesLoading = ref(false);
     const msgInput = ref('');
     const chatBox = ref(null);
     const merchantContacts = ref([]);
+    const merchantContactsLoaded = ref(false);
+    const merchantContactsLoading = ref(false);
+    const conversationWorkspaceLoading = ref(false);
     const showContactPicker = ref(false);
     const showOrderPicker = ref(false);
     const stats = ref(null);
+    const statsLoaded = ref(false);
+    const statsLoading = ref(false);
 
     const orderFilter = ref(null);
     const filteredOrders = computed(() => {
@@ -984,10 +997,39 @@ const app = createApp({
       return { id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', sales: '0', img_url: '', detailImages: [] };
     }
 
+    function deferNonCriticalLoad(task) {
+      const run = () => Promise.resolve().then(task).catch(error => {
+        console.warn('deferred merchant load failed:', error);
+      });
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(() => run(), { timeout: 1200 });
+      } else {
+        window.setTimeout(run, 0);
+      }
+    }
+
+    function createDeferredLoader(loadFn, loadedRef, loadingRef) {
+      let pending = null;
+      return async force => {
+        if (pending) return pending;
+        if (loadedRef.value && !force) return;
+        loadingRef.value = true;
+        pending = Promise.resolve(loadFn());
+        try {
+          await pending;
+          loadedRef.value = true;
+        } finally {
+          loadingRef.value = false;
+          pending = null;
+        }
+      };
+    }
+
     async function api(path, opts = {}) {
       const res = await fetch(API + path, { headers: headers(), ...opts });
       if (res.status === 401) {
         localStorage.removeItem('wx_token');
+        localStorage.removeItem('wx_last_role');
         location.reload();
         throw new Error('登录已过期');
       }
@@ -1183,20 +1225,79 @@ const app = createApp({
       }
     }
 
-    async function openConversation(conv) {
-      currentConversation.value = { ...conv };
-      messages.value = await api(`/merchant/conversations/${conv.conversation_id}/messages?after_id=0`);
-      if (messages.value.length) {
-        await api(`/merchant/conversations/${conv.conversation_id}/read`, {
-          method: 'POST',
-          body: JSON.stringify({ last_message_id: messages.value[messages.value.length - 1].id }),
-        });
-        currentConversation.value.unread_count = 0;
-        const idx = conversations.value.findIndex(item => item.conversation_id === conv.conversation_id);
-        if (idx >= 0) conversations.value[idx] = { ...conversations.value[idx], unread_count: 0 };
+    const runOrdersLoad = createDeferredLoader(loadOrders, ordersLoaded, ordersLoading);
+    const runGoodsLoad = createDeferredLoader(loadGoods, goodsLoaded, goodsLoading);
+    const runStatsLoad = createDeferredLoader(loadStats, statsLoaded, statsLoading);
+    const runConversationsLoad = createDeferredLoader(
+      loadConversations,
+      conversationsLoaded,
+      conversationsLoading
+    );
+    const runMerchantContactsLoad = createDeferredLoader(
+      loadMerchantContacts,
+      merchantContactsLoaded,
+      merchantContactsLoading
+    );
+
+    async function ensureOrdersLoaded(force = false) {
+      await runOrdersLoad(force);
+    }
+
+    async function ensureGoodsLoaded(force = false) {
+      await runGoodsLoad(force);
+    }
+
+    async function ensureStatsLoaded(force = false) {
+      await runStatsLoad(force);
+    }
+
+    async function ensureConversationsLoaded(force = false) {
+      await runConversationsLoad(force);
+    }
+
+    async function ensureMerchantContactsLoaded(force = false) {
+      await runMerchantContactsLoad(force);
+    }
+
+    async function ensureConversationWorkspaceReady(force = false) {
+      conversationWorkspaceLoading.value = true;
+      try {
+        await Promise.all([
+          ensureConversationsLoaded(force),
+          ensureMerchantContactsLoaded(force),
+        ]);
+      } finally {
+        conversationWorkspaceLoading.value = false;
       }
-      await nextTick();
-      scrollChatToBottom(true);
+    }
+
+    async function warmMerchantDeferredData() {
+      await Promise.all([
+        ensureGoodsLoaded(),
+        ensureStatsLoaded(),
+        ensureConversationWorkspaceReady(),
+      ]);
+    }
+
+    async function openConversation(conv) {
+      messagesLoading.value = true;
+      currentConversation.value = { ...conv };
+      try {
+        messages.value = await api(`/merchant/conversations/${conv.conversation_id}/messages?after_id=0`);
+        if (messages.value.length) {
+          await api(`/merchant/conversations/${conv.conversation_id}/read`, {
+            method: 'POST',
+            body: JSON.stringify({ last_message_id: messages.value[messages.value.length - 1].id }),
+          });
+          currentConversation.value.unread_count = 0;
+          const idx = conversations.value.findIndex(item => item.conversation_id === conv.conversation_id);
+          if (idx >= 0) conversations.value[idx] = { ...conversations.value[idx], unread_count: 0 };
+        }
+        await nextTick();
+        scrollChatToBottom(true);
+      } finally {
+        messagesLoading.value = false;
+      }
     }
 
     function closeConversation() {
@@ -1215,7 +1316,7 @@ const app = createApp({
         });
         msgInput.value = '';
         messages.value.push(sent);
-        await loadConversations();
+        await ensureConversationsLoaded(true);
         await nextTick();
         scrollChatToBottom(true);
       } catch (e) {
@@ -1232,7 +1333,7 @@ const app = createApp({
         });
         messages.value.push(sent);
         showOrderPicker.value = false;
-        await loadConversations();
+        await ensureConversationsLoaded(true);
         await nextTick();
         scrollChatToBottom(true);
       } catch (e) {
@@ -1263,11 +1364,11 @@ const app = createApp({
           body: JSON.stringify({ last_message_id: messages.value[messages.value.length - 1].id }),
         });
         currentConversation.value.unread_count = 0;
-        await loadConversations();
+        await ensureConversationsLoaded(true);
         await nextTick();
         scrollChatToBottom(true);
       } else {
-        await loadConversations();
+        await ensureConversationsLoaded(true);
       }
     }
 
@@ -1284,8 +1385,8 @@ const app = createApp({
       try {
         await api(`/orders/${id}/complete`, { method: 'POST' });
         vant.showToast('已完成');
-        await loadOrders();
-        await loadStats();
+        await ensureOrdersLoaded(true);
+        await ensureStatsLoaded(true);
         detailOrder.value = null;
       } finally {
         actionLoading.value = false;
@@ -1302,8 +1403,8 @@ const app = createApp({
       try {
         await api(`/pay/refund/${order.id}`, { method: 'POST', body: JSON.stringify({}) });
         vant.showToast('退款申请已提交');
-        await loadOrders();
-        await loadStats();
+        await ensureOrdersLoaded(true);
+        await ensureStatsLoaded(true);
         detailOrder.value = null;
       } catch (e) {
         vant.showToast('退款失败: ' + (e.message || e));
@@ -1372,7 +1473,7 @@ const app = createApp({
           vant.showToast('创建成功');
         }
         showGoodForm.value = false;
-        await loadGoods();
+        await ensureGoodsLoaded(true);
       } finally {
         savingGood.value = false;
       }
@@ -1381,7 +1482,7 @@ const app = createApp({
     async function toggleGood(good) {
       await api(`/goods/${good.id}`, { method: 'PUT', body: JSON.stringify({ is_active: !good.is_active }) });
       vant.showToast(good.is_active ? '已下架' : '已上架');
-      await loadGoods();
+      await ensureGoodsLoaded(true);
     }
 
     function confirmDeleteGood(good) {
@@ -1393,7 +1494,7 @@ const app = createApp({
     async function deleteGood(id) {
       await api(`/goods/${id}`, { method: 'DELETE' });
       vant.showToast('已删除');
-      await loadGoods();
+      await ensureGoodsLoaded(true);
     }
 
     function statusText(status) {
@@ -1419,15 +1520,16 @@ const app = createApp({
     function retryLogin() {
       loginError.value = false;
       localStorage.removeItem('wx_token');
+      localStorage.removeItem('wx_last_role');
       location.reload();
     }
 
     async function handlePoll() {
-      await loadOrders();
-      if (activeTab.value === 1 && currentConversation.value) {
+      await ensureOrdersLoaded(true);
+      if (activeTab.value === 1 && currentConversation.value && conversationsLoaded.value) {
         await pollConversationMessages();
-      } else {
-        await loadConversations();
+      } else if (conversationsLoaded.value) {
+        await ensureConversationsLoaded(true);
       }
     }
 
@@ -1439,18 +1541,20 @@ const app = createApp({
       } else if (ready.value) {
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(handlePoll, 5000);
-        loadOrders();
-        loadGoods();
-        loadStats();
-        loadConversations();
+        ensureOrdersLoaded(true);
+        if (goodsLoaded.value) ensureGoodsLoaded(true);
+        if (statsLoaded.value) ensureStatsLoaded(true);
+        if (conversationsLoaded.value) ensureConversationsLoaded(true);
       }
     };
 
     watch(activeTab, async tab => {
       if (tab === 1) {
-        await loadConversations();
-      } else if (tab === 3 && !stats.value) {
-        await loadStats();
+        await ensureConversationWorkspaceReady();
+      } else if (tab === 2) {
+        await ensureGoodsLoaded();
+      } else if (tab === 3) {
+        await ensureStatsLoaded();
       }
     });
 
@@ -1458,16 +1562,12 @@ const app = createApp({
       try {
         await initConfig();
         await wxLogin();
+        localStorage.setItem('wx_last_role', 'MERCHANT');
+        await ensureOrdersLoaded();
         ready.value = true;
         loginError.value = false;
         wxJSSDKInit();
-        await Promise.all([
-          loadOrders(),
-          loadGoods(),
-          loadStats(),
-          loadConversations(),
-          loadMerchantContacts(),
-        ]);
+        deferNonCriticalLoad(warmMerchantDeferredData);
         pollTimer = setInterval(handlePoll, 5000);
         window.addEventListener('resize', handleResize);
         document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1492,13 +1592,17 @@ const app = createApp({
       filteredOrders,
       orderFilter,
       conversations,
+      conversationWorkspaceLoading,
       currentConversation,
       goods,
+      goodsLoading,
       detailOrder,
       messages,
+      messagesLoading,
       msgInput,
       chatBox,
       merchantContacts,
+      merchantContactsLoading,
       showContactPicker,
       showOrderPicker,
       stats,

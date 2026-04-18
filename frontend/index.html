@@ -6,105 +6,203 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>到家按摩</title>
-<link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet">
-<script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
-<script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
-<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+<title>到店按摩</title>
 <style>
 :root {
   --bg-primary: #f6f2eb;
-  --bg-card: #fbf8f2;
+  --bg-card: rgba(251, 248, 242, 0.96);
   --text-title: #161514;
   --text-body: #4d4943;
   --text-secondary: #7d786f;
-  --border: #d8d2c6;
+  --border: rgba(216, 210, 198, 0.92);
   --danger: #8d635a;
   --shadow-soft: 0 18px 40px rgba(24, 21, 16, 0.05);
 }
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  background: var(--bg-primary);
-  font-family: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.72), transparent 46%),
+    linear-gradient(180deg, #f7f3ec 0%, #f2ede4 100%);
   color: var(--text-body);
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
 }
-.container {
+.shell {
+  min-height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
   padding: 24px;
 }
 .panel {
-  width: min(100%, 520px);
-  padding: 36px 28px;
-  background: var(--bg-card);
-  border: 1px solid rgba(216,210,198,.92);
+  width: min(100%, 420px);
+  padding: 32px 24px 28px;
   border-radius: 28px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   box-shadow: var(--shadow-soft);
 }
 .kicker {
   font-size: 11px;
-  letter-spacing: .18em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+}
 .logo {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  border: 1px solid rgba(22,21,20,.14);
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-title);
-  font-size: 32px;
+  background: rgba(22, 21, 20, 0.04);
+  border: 1px solid rgba(22, 21, 20, 0.08);
+  font-size: 26px;
   font-weight: 700;
-  font-family: "Noto Serif SC", serif;
-  margin: 18px 0 22px;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
 }
 .title {
-  font-family: "Noto Serif SC", serif;
-  font-size: 32px;
-  line-height: 1.3;
   color: var(--text-title);
-  margin-bottom: 10px;
+  font-size: 28px;
+  line-height: 1.25;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
 }
 .subtitle {
+  margin-top: 10px;
   font-size: 14px;
   line-height: 1.8;
-  color: var(--text-body);
-  margin-bottom: 36px;
-}
-.status-note {
-  font-size: 13px;
   color: var(--text-secondary);
 }
-.van-loading__text { color: var(--text-title) !important; }
-.van-loading__spinner .van-loading__dot { background: var(--text-title) !important; }
-.van-button--primary { background: var(--text-title) !important; border-color: var(--text-title) !important; color: #f7f4ed !important; }
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 28px;
+}
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(22, 21, 20, 0.12);
+  border-top-color: var(--text-title);
+  animation: spin .85s linear infinite;
+}
+.status {
+  color: var(--text-title);
+  font-size: 15px;
+}
+.hint {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.error {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(141, 99, 90, 0.08);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.7;
+  display: none;
+}
+.retry {
+  width: 100%;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 999px;
+  padding: 13px 16px;
+  background: var(--text-title);
+  color: #f7f4ed;
+  font-size: 15px;
+  cursor: pointer;
+  display: none;
+}
+.retry:active { transform: scale(0.99); }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 </style>
 </head>
 <body>
-<div id="app">
-  <div class="container">
-    <div class="panel">
+<div class="shell">
+  <div class="panel">
+    <div class="kicker">Arrival Router</div>
+    <div class="hero">
       <div class="logo">摩</div>
-      <div class="title">到店按摩</div>
-      <van-loading v-if="loading" size="36px"></van-loading>
-      <div v-else-if="error" class="status-note" style="color:var(--danger);">{{ error }}</div>
+      <div>
+        <div class="title">到店按摩</div>
+        <div class="subtitle">正在确认身份，直接进入对应首页。</div>
+      </div>
     </div>
+    <div class="status-row">
+      <div id="spinner" class="spinner"></div>
+      <div id="status" class="status">正在启动...</div>
+    </div>
+    <div class="hint">首次进入会连接微信授权；再次打开会优先直接进入上次使用页面。</div>
+    <div id="error" class="error"></div>
+    <button id="retry" class="retry" type="button">重新进入</button>
   </div>
 </div>
 
 <script>
 let WX_APP_ID = '';
+let BASE_URL = 'https://wx.qlc.xn--6qq986b3xl';
 const WX_OAUTH_BASE = 'https://open.weixin.qq.com/connect/oauth2/authorize';
-const BASE_URL = 'https://wx.qlc.xn--6qq986b3xl';
+const TOKEN_KEY = 'wx_token';
+const LAST_ROLE_KEY = 'wx_last_role';
+const ROLE_PAGES = {
+  CUSTOMER: '/customer',
+  MERCHANT: '/merchant',
+};
+
+const spinnerEl = document.getElementById('spinner');
+const statusEl = document.getElementById('status');
+const errorEl = document.getElementById('error');
+const retryEl = document.getElementById('retry');
+
+function setStatus(text) {
+  statusEl.textContent = text;
+}
+
+function clearSessionCache() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(LAST_ROLE_KEY);
+}
+
+function routeToRole(role) {
+  const page = ROLE_PAGES[role] || ROLE_PAGES.CUSTOMER;
+  location.replace(page);
+}
+
+function showError(message) {
+  spinnerEl.style.display = 'none';
+  errorEl.textContent = message;
+  errorEl.style.display = 'block';
+  retryEl.style.display = 'block';
+}
+
+function normalizeError(detail, fallback) {
+  if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  return fallback;
+}
+
+function cleanOAuthParams() {
+  const params = new URLSearchParams(location.search);
+  params.delete('code');
+  params.delete('state');
+  const search = params.toString();
+  history.replaceState(null, '', location.pathname + (search ? '?' + search : ''));
+}
 
 async function loadFrontendConfig() {
   const res = await fetch('/config/frontend');
@@ -119,74 +217,90 @@ async function loadFrontendConfig() {
     throw new Error('WX_APP_ID 未配置');
   }
   WX_APP_ID = cfg.app_id.trim();
+  if (cfg.base_url) BASE_URL = cfg.base_url;
 }
 
-const { createApp, ref, onMounted } = Vue;
+async function fetchRole(token) {
+  const res = await fetch('/me', { headers: { 'X-Token': token } });
+  if (!res.ok) {
+    throw new Error('获取用户信息失败');
+  }
+  const user = await res.json();
+  localStorage.setItem(LAST_ROLE_KEY, user.role);
+  return user.role;
+}
 
-const app = createApp({
-  setup() {
-    const loading = ref(true);
-    const error = ref('');
+async function exchangeCodeForToken(code) {
+  const res = await fetch(`/wechat/auth?code=${encodeURIComponent(code)}`);
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || typeof data.token !== 'string' || !data.token.trim()) {
+    const detail = data && typeof data.detail === 'string'
+      ? data.detail
+      : '微信登录失败，请重试';
+    throw new Error(normalizeError(detail, '微信登录失败，请重试'));
+  }
+  localStorage.setItem(TOKEN_KEY, data.token);
+  cleanOAuthParams();
+  return data.token;
+}
 
-    onMounted(async () => {
-      try {
-        // 1. 已有 token → 直接判断角色跳转
-        const token = localStorage.getItem('wx_token');
-        if (token) {
-          await redirectByRole(token);
-          return;
-        }
+async function startOAuth() {
+  if (!WX_APP_ID) {
+    throw new Error('WX_APP_ID 未配置');
+  }
+  const redirectUri = encodeURIComponent(BASE_URL + location.pathname);
+  location.replace(
+    `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_userinfo&state=home#wechat_redirect`
+  );
+}
 
-        // 2. URL 有 code → 用 code 换 token
-        const params = new URLSearchParams(location.search);
-        const code = params.get('code');
-        if (code) {
-          const res = await fetch(`/wechat/auth?code=${code}`);
-          if (res.ok) {
-            const data = await res.json();
-            localStorage.setItem('wx_token', data.token);
-            // 清除 URL 参数
-            history.replaceState(null, '', location.pathname);
-            await redirectByRole(data.token);
-            return;
-          }
-        }
+async function boot() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const lastRole = localStorage.getItem(LAST_ROLE_KEY);
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
 
-        // 3. 都没有 → 先加载前端配置，再跳转微信 OAuth
-        await loadFrontendConfig();
-        const redirectUri = encodeURIComponent(BASE_URL + location.pathname);
-        location.href = `${WX_OAUTH_BASE}?appid=${WX_APP_ID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_userinfo&state=home#wechat_redirect`;
-      } catch (e) {
-        error.value = '登录失败: ' + e.message;
-        loading.value = false;
-      }
-    });
+  if (token && lastRole && ROLE_PAGES[lastRole]) {
+    setStatus('正在进入上次使用的页面...');
+    routeToRole(lastRole);
+    return;
+  }
 
-    async function redirectByRole(token) {
-      const res = await fetch('/me', { headers: { 'X-Token': token } });
-      if (!res.ok) {
-        localStorage.removeItem('wx_token');
-        loading.value = false;
-        error.value = '获取用户信息失败';
-        return;
-      }
-      const user = await res.json();
-
-      // 根据角色跳转
-      const rolePages = {
-        CUSTOMER: '/customer',
-        MERCHANT: '/merchant',
-      };
-      const page = rolePages[user.role] || '/customer';
-      location.replace(page);
+  try {
+    if (code) {
+      setStatus('正在确认微信身份...');
+      const freshToken = await exchangeCodeForToken(code);
+      const role = await fetchRole(freshToken);
+      routeToRole(role);
+      return;
     }
 
-    return { loading, error };
+    if (token) {
+      setStatus('正在恢复登录状态...');
+      try {
+        const role = await fetchRole(token);
+        routeToRole(role);
+        return;
+      } catch (error) {
+        clearSessionCache();
+      }
+    }
+
+    setStatus('正在连接微信登录...');
+    await loadFrontendConfig();
+    await startOAuth();
+  } catch (error) {
+    clearSessionCache();
+    showError(normalizeError(error && error.message, '进入系统失败，请重试'));
   }
+}
+
+retryEl.addEventListener('click', () => {
+  clearSessionCache();
+  location.replace(location.pathname);
 });
 
-app.use(vant);
-app.mount('#app');
+boot();
 </script>
 </body>
 </html>

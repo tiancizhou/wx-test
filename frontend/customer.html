@@ -8,9 +8,6 @@
 <meta http-equiv="Expires" content="0">
 <title>到店按摩</title>
 <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/vant@4/lib/index.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://fastly.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://fastly.jsdelivr.net/npm/vant@4/lib/vant.min.js"></script>
 <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
@@ -44,7 +41,7 @@
 }
 body {
   background: var(--bg-primary);
-  font-family: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   color: var(--text-body);
   -webkit-font-smoothing: antialiased;
 }
@@ -90,7 +87,7 @@ a { color: inherit; }
   color: var(--text-title);
   font-size: 18px;
   font-weight: 600;
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
 }
 .chevron-inline {
   color: var(--text-secondary);
@@ -199,7 +196,7 @@ a { color: inherit; }
   animation: fadeRise .55s ease both;
 }
 .page-title {
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 31px;
   line-height: 1.28;
   color: var(--text-title);
@@ -372,7 +369,7 @@ a { color: inherit; }
 }
 .good-card-price {
   color: var(--text-title);
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 22px;
   font-weight: 600;
 }
@@ -459,7 +456,7 @@ a { color: inherit; }
   font-size: 18px;
   color: var(--text-title);
   margin-top: 8px;
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-weight: 600;
 }
 
@@ -661,7 +658,7 @@ a { color: inherit; }
   margin-bottom: 10px;
 }
 .detail-popup .detail-title {
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   font-size: 26px;
   font-weight: 600;
   color: var(--text-title);
@@ -671,7 +668,7 @@ a { color: inherit; }
   color: var(--text-title);
   font-size: 30px;
   font-weight: 600;
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
 }
 .detail-popup .detail-original { font-size: 14px; color: var(--text-secondary); text-decoration: line-through; }
 .detail-popup .detail-meta { font-size: 13px; color: var(--text-secondary); }
@@ -774,7 +771,7 @@ a { color: inherit; }
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-family: "Noto Serif SC", serif;
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
 }
 .profile-info { min-width: 0; }
 .profile-name { font-size: 17px; font-weight: 600; color: var(--text-title); }
@@ -790,7 +787,7 @@ a { color: inherit; }
   animation: fadeRise .55s ease both;
 }
 .stat-item { flex: 1; text-align: center; cursor: pointer; }
-.stat-num { font-size: 24px; font-weight: 600; color: var(--text-title); font-family: "Noto Serif SC", serif; }
+.stat-num { font-size: 24px; font-weight: 600; color: var(--text-title); font-family: "Songti SC", "STSong", "Noto Serif CJK SC", serif; }
 .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 .filter-bar { display: flex; gap: 8px; padding: 16px 18px 8px; overflow-x: auto; }
 .filter-tag {
@@ -948,7 +945,8 @@ a { color: inherit; }
         <div :class="['filter-tag', orderFilter === 3 ? 'active' : '']" @click="orderFilter = orderFilter === 3 ? null : 3">退款中</div>
         <div :class="['filter-tag', orderFilter === 4 ? 'active' : '']" @click="orderFilter = orderFilter === 4 ? null : 4">已退款</div>
       </div>
-      <div v-if="!filteredOrders.length" class="empty-state">暂无订单</div>
+      <div v-if="ordersLoading && !orders.length" class="empty-state">加载中...</div>
+      <div v-else-if="!filteredOrders.length" class="empty-state">暂无订单</div>
       <div v-for="(o, index) in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
         <div class="order-card-index">{{ String(index + 1).padStart(2, '0') }}</div>
         <div class="row-between">
@@ -1034,7 +1032,9 @@ a { color: inherit; }
       </div>
       <div class="chat-messages" ref="conversationBox">
         <div class="message-stream">
-          <div v-if="!conversationMessages.length" class="empty-state compact">暂无消息</div>
+          <div v-if="messageCenterLoading" class="empty-state compact">正在连接商家...</div>
+          <div v-else-if="conversationMessagesLoading" class="empty-state compact">正在加载消息...</div>
+          <div v-else-if="!conversationMessages.length" class="empty-state compact">暂无消息</div>
           <template v-for="m in conversationMessages" :key="m.id">
             <div
               v-if="m.message_type === 'text'"
@@ -1070,6 +1070,7 @@ a { color: inherit; }
 
   <!-- 我的 -->
   <div v-show="activeTab === 3" class="profile-section">
+    <div v-if="profileLoading && !user.nickname && !user.phone" class="empty-state compact">加载中...</div>
     <!-- 个人信息卡片 -->
     <div class="profile-card">
       <div class="profile-avatar">{{ (user.nickname || '用')[0] }}</div>
@@ -1146,7 +1147,8 @@ a { color: inherit; }
   <van-popup v-model:show="showContactPicker" position="bottom" round>
     <div class="popup-panel">
       <div class="popup-title">选择商家</div>
-      <div v-if="!merchantContacts.length" class="popup-empty">暂无可用商家</div>
+      <div v-if="merchantContactsLoading && !merchantContacts.length" class="popup-empty">加载中...</div>
+      <div v-else-if="!merchantContacts.length" class="popup-empty">暂无可用商家</div>
       <div v-for="contact in merchantContacts" :key="contact.id" class="order-card" @click="switchMerchantContact(contact)">
         <div class="title-white">{{ contact.name }}</div>
         <div class="single-line-preview">手机号：{{ contact.phone || '未填' }}</div>
@@ -1157,7 +1159,8 @@ a { color: inherit; }
   <van-popup v-model:show="showOrderPicker" position="bottom" round>
     <div class="popup-panel scrollable">
       <div class="popup-title">选择订单</div>
-      <div v-if="!selectedOrderList.length" class="popup-empty">暂无可发送订单</div>
+      <div v-if="ordersLoading && !selectedOrderList.length" class="popup-empty">加载中...</div>
+      <div v-else-if="!selectedOrderList.length" class="popup-empty">暂无可发送订单</div>
       <div v-for="order in selectedOrderList" :key="order.id" class="order-card" @click="sendOrderCard(order)">
         <div class="row-between">
           <span class="title-white">{{ order.good_title }}</span>
@@ -1284,6 +1287,10 @@ const app = createApp({
     const orders = ref([]);
     const user = ref({});
     const currentOrder = ref(null);
+    const ordersLoaded = ref(false);
+    const ordersLoading = ref(false);
+    const profileLoaded = ref(false);
+    const profileLoading = ref(false);
 
     const showBook = ref(false);
     const bookGood = ref(null);
@@ -1297,7 +1304,13 @@ const app = createApp({
     const conversationMessages = ref([]);
     const conversationInput = ref('');
     const conversationBox = ref(null);
+    const conversationSummaryLoaded = ref(false);
+    const conversationSummaryLoading = ref(false);
+    const conversationMessagesLoading = ref(false);
+    const messageCenterLoading = ref(false);
     const merchantContacts = ref([]);
+    const merchantContactsLoaded = ref(false);
+    const merchantContactsLoading = ref(false);
     const showContactPicker = ref(false);
     const showOrderPicker = ref(false);
 
@@ -1336,10 +1349,39 @@ const app = createApp({
       }
     }
 
+    function deferNonCriticalLoad(task) {
+      const run = () => Promise.resolve().then(task).catch(error => {
+        console.warn('deferred customer load failed:', error);
+      });
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(() => run(), { timeout: 1200 });
+      } else {
+        window.setTimeout(run, 0);
+      }
+    }
+
+    function createDeferredLoader(loadFn, loadedRef, loadingRef) {
+      let pending = null;
+      return async force => {
+        if (pending) return pending;
+        if (loadedRef.value && !force) return;
+        loadingRef.value = true;
+        pending = Promise.resolve(loadFn());
+        try {
+          await pending;
+          loadedRef.value = true;
+        } finally {
+          loadingRef.value = false;
+          pending = null;
+        }
+      };
+    }
+
     async function api(path, opts = {}) {
       const res = await fetch(API + path, { headers: headers(), ...opts });
       if (res.status === 401) {
         localStorage.removeItem('wx_token');
+        localStorage.removeItem('wx_last_role');
         location.reload();
         throw new Error('登录已过期');
       }
@@ -1400,27 +1442,85 @@ const app = createApp({
       merchantContacts.value = await api('/merchant-contacts');
     }
 
-    async function ensureConversationLoaded() {
-      if (!conversation.value) await loadConversationSummary();
-      if (!merchantContacts.value.length) await loadMerchantContacts();
+    const runOrdersLoad = createDeferredLoader(loadOrders, ordersLoaded, ordersLoading);
+    const runProfileLoad = createDeferredLoader(loadMe, profileLoaded, profileLoading);
+    const runConversationSummaryLoad = createDeferredLoader(
+      loadConversationSummary,
+      conversationSummaryLoaded,
+      conversationSummaryLoading
+    );
+    const runMerchantContactsLoad = createDeferredLoader(
+      loadMerchantContacts,
+      merchantContactsLoaded,
+      merchantContactsLoading
+    );
+
+    async function ensureOrdersLoaded(force = false) {
+      await runOrdersLoad(force);
+    }
+
+    async function ensureProfileLoaded(force = false) {
+      await runProfileLoad(force);
+    }
+
+    async function ensureConversationSummaryLoaded(force = false) {
+      await runConversationSummaryLoad(force);
+    }
+
+    async function ensureMerchantContactsLoaded(force = false) {
+      await runMerchantContactsLoad(force);
+    }
+
+    async function ensureMessageCenterReady(force = false) {
+      messageCenterLoading.value = true;
+      try {
+        await Promise.all([
+          ensureConversationSummaryLoaded(force),
+          ensureMerchantContactsLoaded(force),
+        ]);
+      } finally {
+        messageCenterLoading.value = false;
+      }
+    }
+
+    async function warmCustomerDeferredData() {
+      await Promise.all([
+        ensureOrdersLoaded(),
+        ensureProfileLoaded(),
+        ensureMessageCenterReady(),
+      ]);
+    }
+
+    async function ensureConversationLoaded(force = false) {
+      await Promise.all([
+        ensureOrdersLoaded(force),
+        ensureProfileLoaded(force),
+        ensureMessageCenterReady(force),
+      ]);
     }
 
     async function loadConversationMessages(afterId = 0) {
-      const list = await api(`/conversation/messages?after_id=${afterId}`);
-      if (afterId === 0) {
-        conversationMessages.value = list;
-      } else if (list.length) {
-        conversationMessages.value.push(...list);
+      if (afterId === 0 && conversationMessagesLoading.value) return;
+      if (afterId === 0) conversationMessagesLoading.value = true;
+      try {
+        const list = await api(`/conversation/messages?after_id=${afterId}`);
+        if (afterId === 0) {
+          conversationMessages.value = list;
+        } else if (list.length) {
+          conversationMessages.value.push(...list);
+        }
+        if (conversationMessages.value.length) {
+          await api('/conversation/read', {
+            method: 'POST',
+            body: JSON.stringify({ last_message_id: conversationMessages.value[conversationMessages.value.length - 1].id }),
+          });
+          if (conversation.value) conversation.value.unread_count = 0;
+        }
+        await nextTick();
+        scrollConversationToBottom(afterId === 0);
+      } finally {
+        if (afterId === 0) conversationMessagesLoading.value = false;
       }
-      if (conversationMessages.value.length) {
-        await api('/conversation/read', {
-          method: 'POST',
-          body: JSON.stringify({ last_message_id: conversationMessages.value[conversationMessages.value.length - 1].id }),
-        });
-        if (conversation.value) conversation.value.unread_count = 0;
-      }
-      await nextTick();
-      scrollConversationToBottom(afterId === 0);
     }
 
     async function sendConversationText() {
@@ -1559,7 +1659,7 @@ const app = createApp({
           await api(`/pay/mock/confirm/${res.order_id}`, { method: 'POST' });
           showBook.value = false;
           vant.showToast('下单成功');
-          await loadOrders();
+          await ensureOrdersLoaded(true);
           activeTab.value = 1;
           return;
         }
@@ -1596,7 +1696,7 @@ const app = createApp({
 
         showBook.value = false;
         vant.showToast('支付成功');
-        await loadOrders();
+        await ensureOrdersLoaded(true);
         activeTab.value = 1;
       } catch (e) {
         const msg = e.message || e.errMsg || e;
@@ -1627,7 +1727,7 @@ const app = createApp({
       try {
         await api(`/pay/refund/${order.id}`, { method: 'POST', body: JSON.stringify({}) });
         vant.showToast('退款申请已提交');
-        await loadOrders();
+          await ensureOrdersLoaded(true);
         closeOrderDetail();
       } catch (e) {
         vant.showToast('退款失败: ' + (e.message || e));
@@ -1685,12 +1785,17 @@ const app = createApp({
     function retryLogin() {
       loginError.value = false;
       localStorage.removeItem('wx_token');
+      localStorage.removeItem('wx_last_role');
       location.reload();
     }
 
     async function handlePoll() {
-      await loadOrders();
-      await pollConversation();
+      if (ordersLoaded.value) {
+        await ensureOrdersLoaded(true);
+      }
+      if (conversationSummaryLoaded.value) {
+        await pollConversation();
+      }
     }
 
     const handleResize = () => scrollConversationToBottom();
@@ -1701,15 +1806,23 @@ const app = createApp({
       } else if (ready.value) {
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(handlePoll, 5000);
-        loadOrders();
-        loadConversationSummary();
+        if (ordersLoaded.value) ensureOrdersLoaded(true);
+        if (profileLoaded.value) ensureProfileLoaded(true);
+        if (conversationSummaryLoaded.value) ensureConversationSummaryLoaded(true);
       }
     };
 
     watch(activeTab, async tab => {
-      if (tab === 2) {
+      if (tab === 1) {
+        await ensureOrdersLoaded();
+      } else if (tab === 2) {
         await ensureConversationLoaded();
         await loadConversationMessages(0);
+      } else if (tab === 3) {
+        await Promise.all([
+          ensureOrdersLoaded(),
+          ensureProfileLoaded(),
+        ]);
       }
     });
 
@@ -1717,16 +1830,12 @@ const app = createApp({
       try {
         await initConfig();
         await wxLogin();
+        localStorage.setItem('wx_last_role', 'CUSTOMER');
+        await loadGoods();
         ready.value = true;
         loginError.value = false;
         wxJSSDKInit();
-        await Promise.all([
-          loadGoods(),
-          loadOrders(),
-          loadMe(),
-          loadConversationSummary(),
-          loadMerchantContacts(),
-        ]);
+        deferNonCriticalLoad(warmCustomerDeferredData);
         pollTimer = setInterval(handlePoll, 5000);
         window.addEventListener('resize', handleResize);
         document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1749,7 +1858,9 @@ const app = createApp({
       activeTab,
       goods,
       orders,
+      ordersLoading,
       user,
+      profileLoading,
       currentOrder,
       showBook,
       bookGood,
@@ -1760,9 +1871,12 @@ const app = createApp({
       detailImages,
       conversation,
       conversationMessages,
+      conversationMessagesLoading,
       conversationInput,
       conversationBox,
+      messageCenterLoading,
       merchantContacts,
+      merchantContactsLoading,
       showContactPicker,
       showOrderPicker,
       bookMinArrival,
