@@ -13,7 +13,7 @@ if str(BACKEND_DIR) not in sys.path:
 import database as database_module
 import main as main_module
 from database import Base
-from models import Good, Role, User
+from models import Good, MerchantContact, Role, User
 
 
 @pytest_asyncio.fixture
@@ -68,17 +68,34 @@ async def seeded_session(session_factory):
             sales=0,
             detail_images='["/static/detail-1.jpg"]',
         )
+        merchant_contact_a = MerchantContact(
+            name="客服A",
+            wechat="service_a",
+            phone="13900000001",
+            is_active=True,
+            sort_order=10,
+        )
+        merchant_contact_b = MerchantContact(
+            name="客服B",
+            wechat="service_b",
+            phone="13900000002",
+            is_active=True,
+            sort_order=20,
+        )
 
-        session.add_all([customer, merchant, good])
+        session.add_all([customer, merchant, good, merchant_contact_a, merchant_contact_b])
         await session.commit()
         await session.refresh(customer)
         await session.refresh(merchant)
         await session.refresh(good)
+        await session.refresh(merchant_contact_a)
+        await session.refresh(merchant_contact_b)
 
         session.info["seeded_data"] = {
             "customer": customer,
             "merchant": merchant,
             "good": good,
+            "merchant_contacts": [merchant_contact_a, merchant_contact_b],
         }
         yield session
 
@@ -104,6 +121,11 @@ def seeded_good(seeded_data):
 
 
 @pytest.fixture
+def merchant_contacts(seeded_data):
+    return seeded_data["merchant_contacts"]
+
+
+@pytest.fixture
 def auth_headers(customer_user):
     return {"X-Token": customer_user.openid}
 
@@ -116,6 +138,11 @@ def customer_headers(auth_headers):
 @pytest.fixture
 def merchant_headers(merchant_user):
     return {"X-Token": merchant_user.openid}
+
+
+@pytest.fixture
+def admin_headers():
+    return {"X-Admin-Key": "qq5201314"}
 
 
 @pytest.fixture

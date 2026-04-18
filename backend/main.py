@@ -17,8 +17,35 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, init_db
-from models import User, Good, Order, OrderStatus, Consultation, ChatLog, ChatReadState, Role
-from schemas import GoodOut, GoodUpdate, GoodCreate, ConsultCreate, ConsultationOut, OrderOut, ChatMessage, ChatLogOut, UserOut, AdminLogin, UserCreate, UserUpdate
+from models import (
+    User,
+    Good,
+    Order,
+    OrderStatus,
+    MerchantContact,
+    Conversation,
+    ConversationMessage,
+    ConversationReadState,
+    Role,
+)
+from schemas import (
+    GoodOut,
+    GoodUpdate,
+    GoodCreate,
+    OrderOut,
+    UserOut,
+    AdminLogin,
+    UserCreate,
+    UserUpdate,
+    MerchantContactOut,
+    MerchantContactCreate,
+    MerchantContactUpdate,
+    ConversationSummaryOut,
+    ConversationMessageCreate,
+    ConversationMessageOut,
+    ConversationReadIn,
+    ConversationDefaultContactIn,
+)
 from deps import get_current_user, require_role
 
 
@@ -298,27 +325,219 @@ async def upload_image(
 # 会话访问权限校验
 # ============================================================
 
-async def _verify_thread_access(thread_type: str, thread_id: str, user: User, db: AsyncSession):
-    """校验会话存在性及当前用户是否有权访问。商家可访问所有，客户只能访问自己的。"""
-    if thread_type == "order":
-        result = await db.execute(
-            select(Order).where(Order.id == thread_id).options(selectinload(Order.good))
+def _contact_to_out(contact: MerchantContact | None) -> dict | None:
+    if not contact:
+        return None
+    return {
+        "id": contact.id,
+        "name": contact.name,
+        "wechat": contact.wechat,
+        "phone": contact.phone,
+        "is_active": contact.is_active,
+        "sort_order": contact.sort_order,
+    }
+
+
+def _message_preview(message: ConversationMessage | None) -> str:
+    if not message:
+        return ""
+    if message.message_type == "order_card" and message.payload_json:
+        try:
+            payload = json.loads(message.payload_json)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            payload = {}
+        title = payload.get("good_title") or "订单"
+        return f"[订单] {title}"
+    return (message.content or "")[:50]
+
+
+async def _first_active_contact(db: AsyncSession) -> MerchantContact | None:
+    result = await db.execute(
+        select(MerchantContact)
+        .where(MerchantContact.is_active == True)
+        .order_by(MerchantContact.sort_order.asc(), MerchantContact.id.asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _ensure_default_contact(
+    conversation: Conversation,
+    db: AsyncSession,
+) -> MerchantContact | None:
+    contact = conversation.default_merchant_contact
+    if contact and contact.is_active:
+        return contact
+
+    fallback = await _first_active_contact(db)
+    fallback_id = fallback.id if fallback else None
+    if conversation.default_merchant_contact_id != fallback_id:
+        conversation.default_merchant_contact_id = fallback_id
+        await db.commit()
+    conversation.default_merchant_contact = fallback
+    return fallback
+
+
+async def _get_or_create_customer_conversation(user: User, db: AsyncSession) -> Conversation:
+    result = await db.execute(
+        select(Conversation)
+        .options(
+            selectinload(Conversation.customer),
+            selectinload(Conversation.default_merchant_contact),
         )
-        obj = result.scalar_one_or_none()
-    elif thread_type == "consultation":
-        result = await db.execute(
-            select(Consultation).where(Consultation.id == int(thread_id)).options(selectinload(Consultation.good))
+        .where(Conversation.customer_id == user.id)
+    )
+    conversation = result.scalar_one_or_none()
+    if conversation:
+        await _ensure_default_contact(conversation, db)
+        return conversation
+
+    fallback = await _first_active_contact(db)
+    conversation = Conversation(
+        customer_id=user.id,
+        default_merchant_contact_id=fallback.id if fallback else None,
+    )
+    db.add(conversation)
+    await db.commit()
+
+    result = await db.execute(
+        select(Conversation)
+        .options(
+            selectinload(Conversation.customer),
+            selectinload(Conversation.default_merchant_contact),
         )
-        obj = result.scalar_one_or_none()
-    else:
-        raise HTTPException(400, "无效的会话类型")
-    if not obj:
+        .where(Conversation.customer_id == user.id)
+    )
+    conversation = result.scalar_one()
+    await _ensure_default_contact(conversation, db)
+    return conversation
+
+
+async def _build_order_card_payload(order: Order) -> dict:
+    return {
+        "order_id": order.id,
+        "good_title": order.good.title if order.good else "商品",
+        "good_img_url": order.good.img_url if order.good else "",
+        "total_fee": order.total_fee,
+        "appointment_time": order.appointment_time,
+        "status": order.status,
+        "quantity": order.quantity,
+    }
+
+
+def _message_to_out(message: ConversationMessage) -> dict:
+    payload = None
+    if message.payload_json:
+        try:
+            payload = json.loads(message.payload_json)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            payload = None
+    return {
+        "id": message.id,
+        "conversation_id": message.conversation_id,
+        "sender_id": message.sender_id,
+        "sender_role": message.sender_role,
+        "merchant_contact_id": message.merchant_contact_id,
+        "merchant_contact_name": message.merchant_contact.name if message.merchant_contact else "",
+        "message_type": message.message_type,
+        "content": message.content,
+        "order_id": message.order_id,
+        "payload": payload,
+        "create_time": message.create_time,
+    }
+ 
+
+async def _conversation_last_message(conversation_id: int, db: AsyncSession) -> ConversationMessage | None:
+    result = await db.execute(
+        select(ConversationMessage)
+        .where(ConversationMessage.conversation_id == conversation_id)
+        .order_by(ConversationMessage.id.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _validate_read_message_id(
+    conversation_id: int,
+    last_message_id: int,
+    db: AsyncSession,
+) -> int:
+    if last_message_id < 0:
+        raise HTTPException(400, "无效的消息 ID")
+    if last_message_id == 0:
+        return 0
+
+    result = await db.execute(
+        select(ConversationMessage).where(
+            ConversationMessage.id == last_message_id,
+            ConversationMessage.conversation_id == conversation_id,
+        )
+    )
+    message = result.scalar_one_or_none()
+    if not message:
+        raise HTTPException(400, "消息不存在或不属于当前会话")
+    return message.id
+
+
+async def _conversation_unread_count(
+    conversation_id: int,
+    reader_id: int,
+    reader_role: str,
+    db: AsyncSession,
+) -> int:
+    state_result = await db.execute(
+        select(ConversationReadState).where(
+            ConversationReadState.user_id == reader_id,
+            ConversationReadState.conversation_id == conversation_id,
+            ConversationReadState.reader_role == reader_role,
+        )
+    )
+    state = state_result.scalar_one_or_none()
+    last_read_id = state.last_read_message_id if state else 0
+    unread = await db.scalar(
+        select(func.count()).select_from(ConversationMessage).where(
+            ConversationMessage.conversation_id == conversation_id,
+            ConversationMessage.id > last_read_id,
+            ConversationMessage.sender_role != reader_role,
+        )
+    )
+    return int(unread or 0)
+
+
+async def _conversation_summary(
+    conversation: Conversation,
+    reader: User,
+    db: AsyncSession,
+) -> dict:
+    await _ensure_default_contact(conversation, db)
+    message = await _conversation_last_message(conversation.id, db)
+    unread_count = await _conversation_unread_count(conversation.id, reader.id, reader.role, db)
+    customer = conversation.customer
+    return {
+        "conversation_id": conversation.id,
+        "customer_id": conversation.customer_id,
+        "customer_nickname": customer.nickname if customer else "",
+        "unread_count": unread_count,
+        "last_message_preview": _message_preview(message),
+        "last_message_time": message.create_time if message else 0,
+        "default_merchant_contact": _contact_to_out(conversation.default_merchant_contact),
+    }
+
+
+async def _load_conversation_for_merchant(conversation_id: int, db: AsyncSession) -> Conversation:
+    result = await db.execute(
+        select(Conversation)
+        .options(
+            selectinload(Conversation.customer),
+            selectinload(Conversation.default_merchant_contact),
+        )
+        .where(Conversation.id == conversation_id)
+    )
+    conversation = result.scalar_one_or_none()
+    if not conversation:
         raise HTTPException(404, "会话不存在")
-    if user.role == Role.MERCHANT:
-        return obj
-    if obj.customer_id != user.id:
-        raise HTTPException(403, "无权访问该会话")
-    return obj
+    await _ensure_default_contact(conversation, db)
+    return conversation
 
 
 async def _verify_order_access(order_id: str, user: User, db: AsyncSession) -> Order:
@@ -334,6 +553,11 @@ async def _verify_order_access(order_id: str, user: User, db: AsyncSession) -> O
     if order.customer_id != user.id:
         raise HTTPException(403, "无权访问该订单")
     return order
+
+
+def _ensure_order_matches_conversation(order: Order, conversation: Conversation) -> None:
+    if order.customer_id != conversation.customer_id:
+        raise HTTPException(400, "订单不属于当前会话客户")
 
 
 # ============================================================
@@ -750,181 +974,281 @@ async def pending_orders(
     return [_order_to_out(o) for o in result.scalars().all()]
 
 
-@app.post("/consult")
-async def create_consult(
-    data: ConsultCreate,
+@app.get("/merchant-contacts", response_model=list[MerchantContactOut])
+async def get_merchant_contacts(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(MerchantContact)
+        .where(MerchantContact.is_active == True)
+        .order_by(MerchantContact.sort_order.asc(), MerchantContact.id.asc())
+    )
+    return result.scalars().all()
+
+
+@app.get("/conversation", response_model=ConversationSummaryOut)
+async def get_conversation(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """客户：发起或获取商品咨询会话（同一用户+商品只建一个）"""
-    existing = await db.execute(
-        select(Consultation).options(selectinload(Consultation.good))
+    conversation = await _get_or_create_customer_conversation(user, db)
+    return await _conversation_summary(conversation, user, db)
+
+
+@app.get("/conversation/messages", response_model=list[ConversationMessageOut])
+async def get_conversation_messages(
+    after_id: int = 0,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    conversation = await _get_or_create_customer_conversation(user, db)
+    result = await db.execute(
+        select(ConversationMessage)
         .where(
-            Consultation.customer_id == user.id,
-            Consultation.good_id == data.good_id,
+            ConversationMessage.conversation_id == conversation.id,
+            ConversationMessage.id > after_id,
+        )
+        .options(selectinload(ConversationMessage.merchant_contact))
+        .order_by(ConversationMessage.create_time.asc(), ConversationMessage.id.asc())
+    )
+    return [_message_to_out(item) for item in result.scalars().all()]
+
+
+@app.post("/conversation/messages", response_model=ConversationMessageOut)
+async def create_conversation_message(
+    data: ConversationMessageCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    conversation = await _get_or_create_customer_conversation(user, db)
+    contact = conversation.default_merchant_contact
+    if data.merchant_contact_id is not None:
+        selected = await db.execute(select(MerchantContact).where(MerchantContact.id == data.merchant_contact_id))
+        contact = selected.scalar_one_or_none()
+        if not contact or not contact.is_active:
+            raise HTTPException(400, "客服不存在或已停用")
+    elif not contact:
+        contact = await _first_active_contact(db)
+
+    payload_json = ""
+    content = data.content.strip()
+    order_id = ""
+    if data.message_type == "order_card":
+        order = await _verify_order_access(data.order_id, user, db)
+        _ensure_order_matches_conversation(order, conversation)
+        payload_json = json.dumps(await _build_order_card_payload(order), ensure_ascii=False)
+        order_id = order.id
+        content = ""
+
+    message = ConversationMessage(
+        conversation_id=conversation.id,
+        sender_id=user.id,
+        sender_role=user.role,
+        merchant_contact_id=contact.id if contact else None,
+        message_type=data.message_type,
+        content=content,
+        order_id=order_id,
+        payload_json=payload_json,
+    )
+    message.merchant_contact = contact
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+    return _message_to_out(message)
+
+
+@app.post("/conversation/default-contact", response_model=ConversationSummaryOut)
+async def switch_default_contact(
+    data: ConversationDefaultContactIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    conversation = await _get_or_create_customer_conversation(user, db)
+    result = await db.execute(select(MerchantContact).where(MerchantContact.id == data.merchant_contact_id))
+    contact = result.scalar_one_or_none()
+    if not contact or not contact.is_active:
+        raise HTTPException(400, "客服不存在或已停用")
+    conversation.default_merchant_contact_id = contact.id
+    conversation.default_merchant_contact = contact
+    await db.commit()
+    return await _conversation_summary(conversation, user, db)
+
+
+@app.post("/conversation/read")
+async def mark_conversation_read(
+    data: ConversationReadIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    conversation = await _get_or_create_customer_conversation(user, db)
+    validated_message_id = await _validate_read_message_id(conversation.id, data.last_message_id, db)
+    result = await db.execute(
+        select(ConversationReadState).where(
+            ConversationReadState.user_id == user.id,
+            ConversationReadState.conversation_id == conversation.id,
+            ConversationReadState.reader_role == user.role,
         )
     )
-    consult = existing.scalar_one_or_none()
-    if consult:
-        return {
-            "thread_type": "consultation",
-            "thread_id": str(consult.id),
-            "good_id": consult.good_id,
-            "good_title": consult.good.title if consult.good else "",
-            "good_img_url": consult.good.img_url if consult.good else "",
-            "create_time": consult.create_time,
-        }
-
-    consult = Consultation(customer_id=user.id, good_id=data.good_id)
-    db.add(consult)
+    state = result.scalar_one_or_none()
+    if state:
+        state.last_read_message_id = max(state.last_read_message_id, validated_message_id)
+    else:
+        db.add(
+            ConversationReadState(
+                user_id=user.id,
+                conversation_id=conversation.id,
+                reader_role=user.role,
+                last_read_message_id=validated_message_id,
+            )
+        )
     await db.commit()
-    await db.refresh(consult)
+    return {"ok": True}
+
+
+@app.get("/merchant/conversations", response_model=list[ConversationSummaryOut])
+async def merchant_conversations(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
     result = await db.execute(
-        select(Consultation).options(selectinload(Consultation.good)).where(Consultation.id == consult.id)
+        select(Conversation)
+        .options(
+            selectinload(Conversation.customer),
+            selectinload(Conversation.default_merchant_contact),
+        )
+        .order_by(Conversation.create_time.desc())
     )
-    consult = result.scalar_one()
-    return {
-        "thread_type": "consultation",
-        "thread_id": str(consult.id),
-        "good_id": consult.good_id,
-        "good_title": consult.good.title if consult.good else "",
-        "good_img_url": consult.good.img_url if consult.good else "",
-        "create_time": consult.create_time,
-    }
+    items = []
+    for conversation in result.scalars().all():
+        items.append(await _conversation_summary(conversation, user, db))
+    items.sort(key=lambda item: item["last_message_time"] or 0, reverse=True)
+    return items
 
 
-@app.get("/orders/active")
+@app.get("/merchant/conversations/{conversation_id}/messages", response_model=list[ConversationMessageOut])
+async def merchant_conversation_messages(
+    conversation_id: int,
+    after_id: int = 0,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    conversation = await _load_conversation_for_merchant(conversation_id, db)
+    result = await db.execute(
+        select(ConversationMessage)
+        .where(
+            ConversationMessage.conversation_id == conversation.id,
+            ConversationMessage.id > after_id,
+        )
+        .options(selectinload(ConversationMessage.merchant_contact))
+        .order_by(ConversationMessage.create_time.asc(), ConversationMessage.id.asc())
+    )
+    return [_message_to_out(item) for item in result.scalars().all()]
+
+
+@app.post("/merchant/conversations/{conversation_id}/messages", response_model=ConversationMessageOut)
+async def merchant_create_conversation_message(
+    conversation_id: int,
+    data: ConversationMessageCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    conversation = await _load_conversation_for_merchant(conversation_id, db)
+    contact = conversation.default_merchant_contact
+    if data.merchant_contact_id is not None:
+        selected = await db.execute(select(MerchantContact).where(MerchantContact.id == data.merchant_contact_id))
+        contact = selected.scalar_one_or_none()
+        if not contact or not contact.is_active:
+            raise HTTPException(400, "客服不存在或已停用")
+    elif not contact:
+        contact = await _first_active_contact(db)
+
+    if data.message_type == "order_card":
+        order = await _verify_order_access(data.order_id, user, db)
+        _ensure_order_matches_conversation(order, conversation)
+        payload_json = json.dumps(await _build_order_card_payload(order), ensure_ascii=False)
+        content = ""
+        order_id = order.id
+    else:
+        payload_json = ""
+        content = data.content.strip()
+        order_id = ""
+
+    message = ConversationMessage(
+        conversation_id=conversation.id,
+        sender_id=user.id,
+        sender_role=user.role,
+        merchant_contact_id=contact.id if contact else None,
+        message_type=data.message_type,
+        content=content,
+        order_id=order_id,
+        payload_json=payload_json,
+    )
+    message.merchant_contact = contact
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+    return _message_to_out(message)
+
+
+@app.post("/merchant/conversations/{conversation_id}/read")
+async def merchant_mark_conversation_read(
+    conversation_id: int,
+    data: ConversationReadIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    conversation = await _load_conversation_for_merchant(conversation_id, db)
+    validated_message_id = await _validate_read_message_id(conversation.id, data.last_message_id, db)
+    result = await db.execute(
+        select(ConversationReadState).where(
+            ConversationReadState.user_id == user.id,
+            ConversationReadState.conversation_id == conversation.id,
+            ConversationReadState.reader_role == user.role,
+        )
+    )
+    state = result.scalar_one_or_none()
+    if state:
+        state.last_read_message_id = max(state.last_read_message_id, validated_message_id)
+    else:
+        db.add(
+            ConversationReadState(
+                user_id=user.id,
+                conversation_id=conversation.id,
+                reader_role=user.role,
+                last_read_message_id=validated_message_id,
+            )
+        )
+    await db.commit()
+    return {"ok": True}
+
+
+@app.post("/merchant/conversations/{conversation_id}/default-contact", response_model=ConversationSummaryOut)
+async def merchant_switch_default_contact(
+    conversation_id: int,
+    data: ConversationDefaultContactIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(Role.MERCHANT)),
+):
+    conversation = await _load_conversation_for_merchant(conversation_id, db)
+    result = await db.execute(select(MerchantContact).where(MerchantContact.id == data.merchant_contact_id))
+    contact = result.scalar_one_or_none()
+    if not contact or not contact.is_active:
+        raise HTTPException(400, "客服不存在或已停用")
+    conversation.default_merchant_contact_id = contact.id
+    conversation.default_merchant_contact = contact
+    await db.commit()
+    return await _conversation_summary(conversation, user, db)
+
+
+@app.get("/orders/active", response_model=list[OrderOut])
 async def active_orders(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_role(Role.MERCHANT)),
 ):
-    # --- 订单 ---
-    order_result = await db.execute(
-        select(Order).options(selectinload(Order.good), selectinload(Order.customer))
+    result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.good), selectinload(Order.customer))
         .order_by(Order.create_time.desc())
     )
-    all_orders = order_result.scalars().all()
-
-    # --- 咨询 ---
-    consult_result = await db.execute(
-        select(Consultation).options(selectinload(Consultation.good), selectinload(Consultation.customer))
-        .order_by(Consultation.create_time.desc())
-    )
-    all_consults = consult_result.scalars().all()
-
-    if not all_orders and not all_consults:
-        return []
-
-    # 收集所有 thread_id
-    order_thread_ids = [o.id for o in all_orders]
-    consult_thread_ids = [str(c.id) for c in all_consults]
-    all_thread_ids = order_thread_ids + consult_thread_ids
-
-    # 批量查询最后一条消息
-    last_msg_rows = await db.execute(
-        select(
-            ChatLog.thread_type,
-            ChatLog.thread_id,
-            ChatLog.id,
-            ChatLog.create_time,
-            ChatLog.sender_role,
-            ChatLog.content,
-        ).where(
-            ChatLog.id.in_(
-                select(func.max(ChatLog.id)).where(ChatLog.thread_id.in_(all_thread_ids)).group_by(ChatLog.thread_id)
-            )
-        )
-    )
-    last_msg_map = {}
-    for row in last_msg_rows.all():
-        key = f"{row[0]}:{row[1]}"
-        last_msg_map[key] = {
-            "id": row[2], "create_time": row[3],
-            "sender_role": row[4], "content": row[5][:50] if row[5] else "",
-        }
-
-    # 批量查询已读状态
-    read_rows = await db.execute(
-        select(ChatReadState).where(
-            ChatReadState.user_id == user.id,
-            ChatReadState.thread_id.in_(all_thread_ids),
-            ChatReadState.reader_role == user.role,
-        )
-    )
-    read_map = {f"{r.thread_type}:{r.thread_id}": r.last_read_id for r in read_rows.scalars().all()}
-
-    # 批量查询全部未读消息数
-    unread_rows = await db.execute(
-        select(ChatLog.thread_type, ChatLog.thread_id, func.count(ChatLog.id)).where(
-            ChatLog.thread_id.in_(all_thread_ids),
-            ChatLog.sender_role != user.role,
-        ).group_by(ChatLog.thread_type, ChatLog.thread_id)
-    )
-    all_unread = {}
-    for ttype, tid, cnt in unread_rows.all():
-        all_unread[f"{ttype}:{tid}"] = cnt
-
-    # 对有 read_state 的精确计算
-    unread_map = {}
-    for key, last_read_id in read_map.items():
-        ttype, tid = key.split(":", 1)
-        cnt = await db.scalar(
-            select(func.count()).select_from(ChatLog).where(
-                ChatLog.thread_type == ttype,
-                ChatLog.thread_id == tid,
-                ChatLog.id > last_read_id,
-                ChatLog.sender_role != user.role,
-            )
-        )
-        unread_map[key] = cnt
-
-    for key in [f"order:{tid}" for tid in order_thread_ids] + [f"consultation:{tid}" for tid in consult_thread_ids]:
-        if key not in unread_map:
-            unread_map[key] = all_unread.get(key, 0)
-
-    # 组装结果
-    items = []
-
-    for o in all_orders:
-        out = _order_to_out(o)
-        out["thread_type"] = "order"
-        out["thread_id"] = o.id
-        key = f"order:{o.id}"
-        msg = last_msg_map.get(key)
-        out["last_msg_id"] = msg["id"] if msg else 0
-        out["last_msg_time"] = msg["create_time"] if msg else 0
-        out["last_sender_role"] = msg["sender_role"] if msg else ""
-        out["last_content"] = msg["content"] if msg else ""
-        out["unread_count"] = unread_map.get(key, 0)
-        items.append(out)
-
-    for c in all_consults:
-        key = f"consultation:{c.id}"
-        msg = last_msg_map.get(key)
-        items.append({
-            "thread_type": "consultation",
-            "thread_id": str(c.id),
-            "id": f"C{c.id}",
-            "customer_id": c.customer_id,
-            "customer_nickname": c.customer.nickname if c.customer else "",
-            "good_id": c.good_id,
-            "good_title": c.good.title if c.good else "",
-            "good_img_url": c.good.img_url if c.good else "",
-            "good_duration": c.good.duration if c.good else 0,
-            "phone": "", "address": "", "appointment_time": "",
-            "total_fee": 0, "quantity": 1,
-            "status": -1,  # consultation marker for frontend compatibility
-            "create_time": c.create_time,
-            "last_msg_id": msg["id"] if msg else 0,
-            "last_msg_time": msg["create_time"] if msg else 0,
-            "last_sender_role": msg["sender_role"] if msg else "",
-            "last_content": msg["content"] if msg else "",
-            "unread_count": unread_map.get(key, 0),
-        })
-
-    # 按最后消息时间倒序，没有消息的按创建时间
-    items.sort(key=lambda x: x.get("last_msg_time") or x.get("create_time", 0), reverse=True)
-    return items
+    return [_order_to_out(order) for order in result.scalars().all()]
 
 
 @app.post("/orders/{order_id}/complete")
@@ -1036,186 +1360,6 @@ async def stats_dashboard(
 
 
 # ============================================================
-# 聊天
-# ============================================================
-
-@app.get("/chat/conversations")
-async def get_conversations(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """获取会话列表（订单+咨询，按最后消息时间倒序）"""
-    conversations = []
-
-    # --- 订单会话 ---
-    order_result = await db.execute(
-        select(Order).options(selectinload(Order.good))
-        .where(Order.customer_id == user.id)
-    )
-    for order in order_result.scalars().all():
-        last_msg = await db.execute(
-            select(ChatLog)
-            .where(ChatLog.thread_type == "order", ChatLog.thread_id == order.id)
-            .order_by(ChatLog.id.desc()).limit(1)
-        )
-        msg = last_msg.scalar_one_or_none()
-        if msg:
-            read_state = await db.execute(
-                select(ChatReadState.last_read_id).where(
-                    ChatReadState.user_id == user.id,
-                    ChatReadState.thread_type == "order",
-                    ChatReadState.thread_id == order.id,
-                    ChatReadState.reader_role == user.role,
-                )
-            )
-            last_read_id = read_state.scalar() or 0
-            unread = await db.scalar(
-                select(func.count()).select_from(ChatLog).where(
-                    ChatLog.thread_type == "order",
-                    ChatLog.thread_id == order.id,
-                    ChatLog.id > last_read_id,
-                    ChatLog.sender_role != user.role,
-                )
-            )
-            conversations.append({
-                "thread_type": "order",
-                "thread_id": order.id,
-                "create_time": order.create_time,
-                "good_title": order.good.title if order.good else "商品",
-                "good_img_url": order.good.img_url if order.good else "",
-                "last_content": msg.content[:50],
-                "last_time": msg.create_time,
-                "last_msg_id": msg.id,
-                "last_sender_role": msg.sender_role,
-                "status": order.status,
-                "unread_count": unread,
-            })
-
-    # --- 咨询会话 ---
-    consult_result = await db.execute(
-        select(Consultation).options(selectinload(Consultation.good))
-        .where(Consultation.customer_id == user.id)
-    )
-    for consult in consult_result.scalars().all():
-        last_msg = await db.execute(
-            select(ChatLog)
-            .where(ChatLog.thread_type == "consultation", ChatLog.thread_id == str(consult.id))
-            .order_by(ChatLog.id.desc()).limit(1)
-        )
-        msg = last_msg.scalar_one_or_none()
-        if msg:
-            read_state = await db.execute(
-                select(ChatReadState.last_read_id).where(
-                    ChatReadState.user_id == user.id,
-                    ChatReadState.thread_type == "consultation",
-                    ChatReadState.thread_id == str(consult.id),
-                    ChatReadState.reader_role == user.role,
-                )
-            )
-            last_read_id = read_state.scalar() or 0
-            unread = await db.scalar(
-                select(func.count()).select_from(ChatLog).where(
-                    ChatLog.thread_type == "consultation",
-                    ChatLog.thread_id == str(consult.id),
-                    ChatLog.id > last_read_id,
-                    ChatLog.sender_role != user.role,
-                )
-            )
-            conversations.append({
-                "thread_type": "consultation",
-                "thread_id": str(consult.id),
-                "create_time": consult.create_time,
-                "good_title": consult.good.title if consult.good else "商品",
-                "good_img_url": consult.good.img_url if consult.good else "",
-                "last_content": msg.content[:50],
-                "last_time": msg.create_time,
-                "last_msg_id": msg.id,
-                "last_sender_role": msg.sender_role,
-                "status": -1,
-                "unread_count": unread,
-            })
-
-    conversations.sort(key=lambda x: x["last_time"], reverse=True)
-    return conversations
-
-
-@app.get("/chat/{thread_type}/{thread_id}", response_model=list[ChatLogOut])
-async def get_chat(
-    thread_type: str,
-    thread_id: str,
-    after_id: int = 0,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    await _verify_thread_access(thread_type, thread_id, user, db)
-    result = await db.execute(
-        select(ChatLog)
-        .where(ChatLog.thread_type == thread_type, ChatLog.thread_id == thread_id, ChatLog.id > after_id)
-        .order_by(ChatLog.create_time)
-    )
-    return result.scalars().all()
-
-
-@app.post("/chat", response_model=ChatLogOut)
-async def send_chat(
-    data: ChatMessage,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    await _verify_thread_access(data.thread_type, data.thread_id, user, db)
-    log = ChatLog(
-        thread_type=data.thread_type,
-        thread_id=data.thread_id,
-        sender_id=user.id,
-        sender_role=user.role,
-        content=data.content,
-    )
-    db.add(log)
-    await db.commit()
-    await db.refresh(log)
-    return log
-
-
-@app.post("/chat/read/{thread_type}/{thread_id}")
-async def mark_chat_read(
-    thread_type: str,
-    thread_id: str,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """标记该用户在此会话中已读（记录最新消息 id）"""
-    await _verify_thread_access(thread_type, thread_id, user, db)
-    last_msg = await db.execute(
-        select(ChatLog).where(
-            ChatLog.thread_type == thread_type, ChatLog.thread_id == thread_id
-        ).order_by(ChatLog.id.desc()).limit(1)
-    )
-    msg = last_msg.scalar_one_or_none()
-    if not msg:
-        return {"ok": True}
-    existing = await db.execute(
-        select(ChatReadState).where(
-            ChatReadState.user_id == user.id,
-            ChatReadState.thread_type == thread_type,
-            ChatReadState.thread_id == thread_id,
-            ChatReadState.reader_role == user.role,
-        )
-    )
-    state = existing.scalar_one_or_none()
-    if state:
-        state.last_read_id = msg.id
-    else:
-        state = ChatReadState(
-            user_id=user.id, thread_type=thread_type,
-            thread_id=thread_id, reader_role=user.role, last_read_id=msg.id
-        )
-        db.add(state)
-    await db.commit()
-    return {"ok": True}
-
-
-
-# ============================================================
 # 用户信息
 # ============================================================
 
@@ -1307,6 +1451,63 @@ async def admin_delete_user(
     await db.delete(user)
     await db.commit()
     return {"msg": "已删除"}
+
+
+@app.get("/admin/merchant-contacts", response_model=list[MerchantContactOut])
+async def admin_merchant_contacts(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_admin_key),
+):
+    result = await db.execute(
+        select(MerchantContact).order_by(MerchantContact.sort_order.asc(), MerchantContact.id.asc())
+    )
+    return result.scalars().all()
+
+
+@app.post("/admin/merchant-contacts", response_model=MerchantContactOut)
+async def create_merchant_contact(
+    data: MerchantContactCreate,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_admin_key),
+):
+    contact = MerchantContact(**data.model_dump())
+    db.add(contact)
+    await db.commit()
+    await db.refresh(contact)
+    return contact
+
+
+@app.put("/admin/merchant-contacts/{contact_id}", response_model=MerchantContactOut)
+async def update_merchant_contact(
+    contact_id: int,
+    data: MerchantContactUpdate,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_admin_key),
+):
+    result = await db.execute(select(MerchantContact).where(MerchantContact.id == contact_id))
+    contact = result.scalar_one_or_none()
+    if not contact:
+        raise HTTPException(404, "客服不存在")
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(contact, key, value)
+    await db.commit()
+    await db.refresh(contact)
+    return contact
+
+
+@app.delete("/admin/merchant-contacts/{contact_id}")
+async def delete_merchant_contact(
+    contact_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(verify_admin_key),
+):
+    result = await db.execute(select(MerchantContact).where(MerchantContact.id == contact_id))
+    contact = result.scalar_one_or_none()
+    if not contact:
+        raise HTTPException(404, "客服不存在")
+    await db.delete(contact)
+    await db.commit()
+    return {"ok": True}
 
 
 # ============================================================

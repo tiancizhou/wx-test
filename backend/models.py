@@ -73,6 +73,60 @@ class Order(Base):
     good: Mapped["Good"] = relationship()
 
 
+class MerchantContact(Base):
+    __tablename__ = "merchant_contacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64))
+    wechat: Mapped[str] = mapped_column(String(64), default="")
+    phone: Mapped[str] = mapped_column(String(20), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    default_merchant_contact_id: Mapped[int | None] = mapped_column(
+        ForeignKey("merchant_contacts.id"),
+        nullable=True,
+    )
+    create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
+
+    customer: Mapped["User"] = relationship()
+    default_merchant_contact: Mapped["MerchantContact | None"] = relationship()
+
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"), index=True)
+    sender_id: Mapped[int] = mapped_column(Integer)
+    sender_role: Mapped[str] = mapped_column(String(16))
+    merchant_contact_id: Mapped[int | None] = mapped_column(ForeignKey("merchant_contacts.id"), nullable=True)
+    message_type: Mapped[str] = mapped_column(String(16), default="text")
+    content: Mapped[str] = mapped_column(Text, default="")
+    order_id: Mapped[str] = mapped_column(String(32), default="")
+    payload_json: Mapped[str] = mapped_column(Text, default="")
+    create_time: Mapped[int] = mapped_column(Integer, default=lambda: int(time.time()))
+
+    merchant_contact: Mapped["MerchantContact | None"] = relationship()
+
+
+class ConversationReadState(Base):
+    __tablename__ = "conversation_read_states"
+    __table_args__ = (PrimaryKeyConstraint("user_id", "conversation_id", "reader_role"),)
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"))
+    reader_role: Mapped[str] = mapped_column(String(16), default="")
+    last_read_message_id: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class Consultation(Base):
     __tablename__ = "consultations"
 

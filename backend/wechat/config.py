@@ -2,6 +2,34 @@ import os
 from pathlib import Path
 
 
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+ENV_FILE = BACKEND_DIR / ".env"
+
+
+def _load_env_file(env_file: Path = ENV_FILE) -> None:
+    if not env_file.is_file():
+        return
+
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
+            value = value[1:-1]
+
+        os.environ.setdefault(key, value)
+
+
+_load_env_file()
+
+
 class WeChatSettings:
     TOKEN: str = os.getenv("WX_TOKEN", "")
     APP_ID: str = os.getenv("WX_APP_ID", "")

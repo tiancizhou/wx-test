@@ -242,55 +242,60 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
         <div style="font-size:13px;margin-top:4px;"><span class="label">预约时间：</span><span class="value">{{ currentOrder.appointment_time }}</span></div>
         <div v-if="currentOrder.quantity > 1" style="font-size:13px;margin-top:4px;"><span class="label">数量：</span><span class="value">{{ currentOrder.quantity }}</span></div>
       </div>
-      <!-- 退款按钮 -->
-      <div v-if="[1,2].includes(currentOrder.status)" style="padding:0 10px;margin-top:12px;">
-        <van-button block round type="danger" size="small" @click="refundOrder(currentOrder)" :loading="submitting">申请退款</van-button>
+      <!-- 操作按钮 -->
+      <div style="padding:0 10px;margin-top:12px;display:flex;gap:8px;">
+        <van-button block round type="primary" plain size="small" @click="contactAboutOrder(currentOrder)">联系商家</van-button>
+        <van-button
+          v-if="[1,2].includes(currentOrder.status)"
+          block
+          round
+          type="danger"
+          size="small"
+          @click="refundOrder(currentOrder)"
+          :loading="submitting"
+        >
+          申请退款
+        </van-button>
       </div>
     </div>
   </div>
 
   <!-- 消息Tab -->
-  <div v-show="activeTab === 2">
-    <!-- 会话列表 -->
-    <div v-show="!activeConv" class="section-pad-bottom">
-      <div v-if="!conversations.length" class="empty-state">暂无消息</div>
-      <div v-for="c in conversations" :key="c.thread_id" class="order-card" @click="openConversation(c)">
-        <div class="row-between">
-          <div class="conv-title-row">
-            <span v-if="c.unread_count" class="unread-badge">{{ c.unread_count }}</span>
-            <span class="conv-title-text">{{ c.good_title }}</span>
-            <span v-if="c.thread_type === 'consultation'" class="consult-badge">咨询</span>
-            <span v-else :class="['order-status', statusClass(c.status), 'status-badge-sm']">{{ statusText(c.status) }}</span>
-          </div>
-          <span class="meta-time time-right">{{ formatTime(c.last_time) }}</span>
-        </div>
-        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
-          {{ c.thread_type === 'consultation' ? '咨询' : '订单号 ' + c.thread_id.slice(-8) }} · {{ formatTime(c.create_time) }}
-        </div>
-        <div class="single-line-preview">
-          {{ c.last_content }}
-        </div>
+  <div v-show="activeTab === 2" class="chat-wrap">
+    <div class="detail-header">
+      <span class="title-white">{{ conversation?.default_merchant_contact?.name || '联系商家' }}</span>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <van-button size="mini" plain @click="showContactPicker = true">切换客服</van-button>
+        <van-button size="mini" type="primary" @click="showOrderPicker = true">发送订单</van-button>
       </div>
     </div>
-    <!-- 聊天视图 -->
-    <div v-show="activeConv" class="chat-wrap">
-      <div class="detail-header">
-        <span class="back-arrow" @click="closeConversation">‹</span>
-        <span class="title-white">{{ activeConv?.good_title }}</span>
-      </div>
-      <div class="chat-messages" ref="convChatBox">
-        <div v-if="!convMessages.length" class="empty-state" style="padding:40px 0;">暂无消息</div>
-        <div v-for="m in convMessages" :key="m.id"
-             :class="['bubble', 'chat-bubble-col', m.sender_role === user.role ? 'bubble-right' : 'bubble-left']">
-          <div v-if="m.sender_role !== user.role" class="bubble-role">{{ roleLabel(m.sender_role) }}</div>
+    <div class="chat-messages" ref="conversationBox">
+      <div v-if="!conversationMessages.length" class="empty-state" style="padding:40px 0;">暂无消息</div>
+      <template v-for="m in conversationMessages" :key="m.id">
+        <div
+          v-if="m.message_type === 'text'"
+          :class="['bubble', 'chat-bubble-col', m.sender_role === user.role ? 'bubble-right' : 'bubble-left']"
+        >
+          <div v-if="m.sender_role !== user.role" class="bubble-role">{{ m.merchant_contact_name || roleLabel(m.sender_role) }}</div>
           <div>{{ m.content }}</div>
           <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
         </div>
-      </div>
-      <div class="chat-input-bar">
-        <input v-model="convMsgInput" placeholder="输入消息..." @keyup.enter="sendConvMessage">
-        <button @click="sendConvMessage">发送</button>
-      </div>
+        <div
+          v-else
+          :class="['bubble', 'chat-bubble-col', m.sender_role === user.role ? 'bubble-right' : 'bubble-left']"
+        >
+          <div v-if="m.sender_role !== user.role" class="bubble-role">{{ m.merchant_contact_name || roleLabel(m.sender_role) }}</div>
+          <div style="font-weight:600;">[订单] {{ m.payload?.good_title || '商品' }}</div>
+          <div style="font-size:12px;margin-top:4px;">订单号 {{ m.order_id.slice(-8) }}</div>
+          <div style="font-size:12px;">预约：{{ m.payload?.appointment_time || '未预约' }}</div>
+          <div style="font-size:12px;">金额：¥{{ formatPrice(m.payload?.total_fee || 0) }}</div>
+          <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
+        </div>
+      </template>
+    </div>
+    <div class="chat-input-bar">
+      <input v-model="conversationInput" placeholder="输入消息..." @keyup.enter="sendConversationText">
+      <button @click="sendConversationText">发送</button>
     </div>
   </div>
 
@@ -317,7 +322,7 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
     </div>
     <!-- 快捷功能 -->
     <van-cell-group inset style="margin-top:12px;">
-      <van-cell title="联系商家" is-link @click="contactMerchant" />
+      <van-cell title="联系商家" is-link @click="openGeneralConversation" />
     </van-cell-group>
   </div>
 
@@ -341,32 +346,36 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
           </div>
         </div>
         <div class="detail-cta" style="display:flex;gap:10px;">
-          <van-button style="flex:1;" round plain @click="startConsult(detailGood)">咨询商家</van-button>
+          <van-button style="flex:1;" round plain @click="showDetail=false; openGeneralConversation()">联系商家</van-button>
           <van-button type="primary" style="flex:2;" round @click="showDetail=false;openBook(detailGood)">立即下单 · ¥{{ formatPrice(detailGood.price) }}</van-button>
         </div>
       </div>
     </div>
   </van-popup>
 
-  <!-- 联系商家弹窗 -->
-  <van-popup v-model:show="showContact" position="bottom" round :style="{ minHeight: '30%' }">
-    <div style="padding:24px 20px;">
-      <div style="font-size:16px;font-weight:600;color:#ffffff;margin-bottom:20px;">联系商家</div>
-      <div v-if="contactInfo.wechat" style="margin-bottom:16px;">
-        <div style="font-size:13px;color:#b0b0c0;margin-bottom:4px;">微信号</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:15px;color:#ffffff;">{{ contactInfo.wechat }}</span>
-          <van-button size="mini" type="primary" @click="copyText(contactInfo.wechat)">复制</van-button>
-        </div>
+  <van-popup v-model:show="showContactPicker" position="bottom" round>
+    <div style="padding:20px;">
+      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:12px;">选择客服</div>
+      <div v-if="!merchantContacts.length" class="empty-state" style="padding:20px 0;">暂无可用客服</div>
+      <div v-for="contact in merchantContacts" :key="contact.id" class="order-card" @click="switchMerchantContact(contact)">
+        <div class="title-white">{{ contact.name }}</div>
+        <div class="single-line-preview">微信：{{ contact.wechat || '未填' }} · 手机：{{ contact.phone || '未填' }}</div>
       </div>
-      <div v-if="contactInfo.phone" style="margin-bottom:16px;">
-        <div style="font-size:13px;color:#b0b0c0;margin-bottom:4px;">手机号</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:15px;color:#ffffff;">{{ contactInfo.phone }}</span>
-          <van-button size="mini" type="primary" @click="copyText(contactInfo.phone)">复制</van-button>
+    </div>
+  </van-popup>
+
+  <van-popup v-model:show="showOrderPicker" position="bottom" round>
+    <div style="padding:20px;max-height:60vh;overflow-y:auto;">
+      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:12px;">选择订单</div>
+      <div v-if="!selectedOrderList.length" class="empty-state" style="padding:20px 0;">暂无可发送订单</div>
+      <div v-for="order in selectedOrderList" :key="order.id" class="order-card" @click="sendOrderCard(order)">
+        <div class="row-between">
+          <span class="title-white">{{ order.good_title }}</span>
+          <span :class="['order-status', statusClass(order.status)]">{{ statusText(order.status) }}</span>
         </div>
+        <div class="order-summary-text">订单号 {{ order.id.slice(-8) }} · {{ order.appointment_time }}</div>
+        <div class="order-price">¥{{ formatPrice(order.total_fee) }}</div>
       </div>
-      <div v-if="!contactInfo.wechat && !contactInfo.phone" style="text-align:center;color:#787890;padding:20px 0;">暂未配置联系方式</div>
     </div>
   </van-popup>
 
@@ -487,18 +496,17 @@ const app = createApp({
   setup() {
     const API = '';
     const TOKEN = () => localStorage.getItem('wx_token') || '';
+    const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
+
     const ready = ref(false);
     const loginError = ref(false);
-
     const activeTab = ref(0);
+
     const goods = ref([]);
     const orders = ref([]);
     const user = ref({});
-    const userId = ref(0);
-    const messages = ref([]);
     const currentOrder = ref(null);
-    const msgInput = ref('');
-    const chatBox = ref(null);
+
     const showBook = ref(false);
     const bookGood = ref(null);
     const bookForm = ref({ phone: '', date: '', timeSlot: '', quantity: 1 });
@@ -506,80 +514,50 @@ const app = createApp({
     const detailGood = ref(null);
     const detailImages = ref([]);
     const submitting = ref(false);
-    const conversations = ref([]);
-    const activeConv = ref(null);      // 当前打开的会话 {thread_type, thread_id, good_title}
-    const convMessages = ref([]);      // 当前会话的消息
-    const convMsgInput = ref('');      // 当前会话的输入框
-    const convChatBox = ref(null);     // 当前会话的滚动容器 ref
 
-    // ---- 未读追踪 ----
-    const unreadCount = computed(() => conversations.value.reduce((sum, c) => sum + (c.unread_count || 0), 0));
-    async function markRead(threadType, threadId) {
-      try { await api(`/chat/read/${threadType}/${threadId}`, { method: 'POST' }); } catch {}
-    }
-    const orderFilter = ref(null); // null=全部, 1=已下单, 2=已完成, 3=退款中, 4=已退款
-    const orderStats = computed(() => {
-      const s = { ordered: 0, completed: 0 };
-      for (const o of orders.value) {
-        if (o.status === 1) s.ordered++;
-        else if (o.status === 2) s.completed++;
-      }
-      return s;
-    });
-    const filteredOrders = computed(() => {
-      if (orderFilter.value === null) return orders.value;
-      return orders.value.filter(o => o.status === orderFilter.value);
-    });
-    function goToOrders(status) {
-      orderFilter.value = status;
-      activeTab.value = 1;
-    }
-    function clearFilter() {
-      orderFilter.value = null;
-    }
-    const showContact = ref(false);
-    const contactInfo = ref({ wechat: '', phone: '' });
-    async function contactMerchant() {
-      try {
-        contactInfo.value = await api('/config/contact');
-      } catch {}
-      showContact.value = true;
-    }
-    function copyText(text) {
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(() => vant.showToast('已复制'));
-      } else {
-        const ta = document.createElement('textarea');
-        ta.value = text; document.body.appendChild(ta); ta.select();
-        document.execCommand('copy'); document.body.removeChild(ta);
-        vant.showToast('已复制');
-      }
-    }
-    const orderMessageCache = ref({});
-    const convMessageCache = ref({});
+    const conversation = ref(null);
+    const conversationMessages = ref([]);
+    const conversationInput = ref('');
+    const conversationBox = ref(null);
+    const merchantContacts = ref([]);
+    const showContactPicker = ref(false);
+    const showOrderPicker = ref(false);
 
     const timeSlots = ['09:00-10:00','10:00-11:00','11:00-12:00','14:00-15:00','15:00-16:00','16:00-17:00','19:00-20:00','20:00-21:00'];
     const dateOptions = ref([]);
+    const orderFilter = ref(null);
 
-    function initDateOptions() {
-      const today = new Date();
-      const options = [];
-      for (let i = 0; i < 3; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() + i);
-        const mm = String(d.getMonth()+1).padStart(2,'0');
-        const dd = String(d.getDate()).padStart(2,'0');
-        const weekday = ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
-        const val = `${d.getFullYear()}-${mm}-${dd}`;
-        const label = i === 0 ? `今天 ${mm}/${dd}` : i === 1 ? `明天 ${mm}/${dd}` : `${weekday} ${mm}/${dd}`;
-        options.push({ value: val, label });
+    const unreadCount = computed(() => conversation.value?.unread_count || 0);
+    const orderStats = computed(() => {
+      const stats = { ordered: 0, completed: 0 };
+      for (const order of orders.value) {
+        if (order.status === 1) stats.ordered++;
+        else if (order.status === 2) stats.completed++;
       }
-      dateOptions.value = options;
-      bookForm.value.date = options[0].value;
-    }
+      return stats;
+    });
+    const filteredOrders = computed(() => {
+      if (orderFilter.value === null) return orders.value;
+      return orders.value.filter(order => order.status === orderFilter.value);
+    });
+    const selectedOrderList = computed(() => orders.value.filter(order => order.status >= 1));
+
     let pollTimer = null;
 
-    const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
+    function formatPrice(fen) {
+      return (Number(fen || 0) / 100).toFixed(2);
+    }
+
+    function isNearBottom(el) {
+      return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    }
+
+    function scrollConversationToBottom(force = false) {
+      if (!conversationBox.value) return;
+      if (force || isNearBottom(conversationBox.value)) {
+        conversationBox.value.scrollTop = conversationBox.value.scrollHeight;
+      }
+    }
 
     async function api(path, opts = {}) {
       const res = await fetch(API + path, { headers: headers(), ...opts });
@@ -592,53 +570,180 @@ const app = createApp({
       return res.json();
     }
 
-    async function loadGoods() { goods.value = await api('/goods'); }
-    async function loadOrders() { orders.value = await api('/my_orders'); }
+    function initDateOptions() {
+      const today = new Date();
+      const options = [];
+      for (let i = 0; i < 3; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
+        const value = `${d.getFullYear()}-${mm}-${dd}`;
+        const label = i === 0 ? `今天 ${mm}/${dd}` : i === 1 ? `明天 ${mm}/${dd}` : `${weekday} ${mm}/${dd}`;
+        options.push({ value, label });
+      }
+      dateOptions.value = options;
+      bookForm.value.date = options[0]?.value || '';
+    }
+
+    function goToOrders(status) {
+      orderFilter.value = status;
+      activeTab.value = 1;
+    }
+
+    function clearFilter() {
+      orderFilter.value = null;
+    }
+
+    async function loadGoods() {
+      goods.value = await api('/goods');
+    }
+
+    async function loadOrders() {
+      orders.value = await api('/my_orders');
+    }
+
     async function loadMe() {
-      try { user.value = await api('/me'); userId.value = user.value.id; } catch {}
+      try {
+        user.value = await api('/me');
+      } catch {}
     }
-    async function loadChat(orderId) {
-      messages.value = orderMessageCache.value[orderId] ? [...orderMessageCache.value[orderId]] : [];
-      const loaded = await api(`/chat/order/${orderId}?after_id=0`);
-      messages.value = loaded;
-      orderMessageCache.value[orderId] = [...loaded];
-      if (loaded.length) markRead('order', orderId);
+
+    async function loadConversationSummary() {
+      conversation.value = await api('/conversation');
+    }
+
+    async function loadMerchantContacts() {
+      merchantContacts.value = await api('/merchant-contacts');
+    }
+
+    async function ensureConversationLoaded() {
+      if (!conversation.value) await loadConversationSummary();
+      if (!merchantContacts.value.length) await loadMerchantContacts();
+    }
+
+    async function loadConversationMessages(afterId = 0) {
+      const list = await api(`/conversation/messages?after_id=${afterId}`);
+      if (afterId === 0) {
+        conversationMessages.value = list;
+      } else if (list.length) {
+        conversationMessages.value.push(...list);
+      }
+      if (conversationMessages.value.length) {
+        await api('/conversation/read', {
+          method: 'POST',
+          body: JSON.stringify({ last_message_id: conversationMessages.value[conversationMessages.value.length - 1].id }),
+        });
+        if (conversation.value) conversation.value.unread_count = 0;
+      }
       await nextTick();
-      if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+      scrollConversationToBottom(afterId === 0);
     }
-    async function pollChat() {
-      if (activeTab.value === 1 && currentOrder.value) {
-        const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
-        const newMsgs = await api(`/chat/order/${currentOrder.value.id}?after_id=${lastId}`);
-        if (newMsgs.length) {
-          messages.value.push(...newMsgs);
-          orderMessageCache.value[currentOrder.value.id] = [...messages.value];
-          markRead('order', currentOrder.value.id);
-          await nextTick();
-          if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
-        }
-      } else if (activeTab.value === 2 && activeConv.value) {
-        await pollConvChat();
-      } else {
-        await loadConversations();
+
+    async function sendConversationText() {
+      if (!conversationInput.value.trim()) return;
+      const sent = await api('/conversation/messages', {
+        method: 'POST',
+        body: JSON.stringify({ message_type: 'text', content: conversationInput.value }),
+      });
+      conversationInput.value = '';
+      conversationMessages.value.push(sent);
+      await loadConversationSummary();
+      await nextTick();
+      scrollConversationToBottom(true);
+    }
+
+    async function sendOrderCard(order) {
+      await ensureConversationLoaded();
+      const sent = await api('/conversation/messages', {
+        method: 'POST',
+        body: JSON.stringify({ message_type: 'order_card', order_id: order.id }),
+      });
+      conversationMessages.value.push(sent);
+      showOrderPicker.value = false;
+      activeTab.value = 2;
+      await loadConversationSummary();
+      await nextTick();
+      scrollConversationToBottom(true);
+    }
+
+    async function switchMerchantContact(contact) {
+      const updated = await api('/conversation/default-contact', {
+        method: 'POST',
+        body: JSON.stringify({ merchant_contact_id: contact.id }),
+      });
+      conversation.value = { ...(conversation.value || {}), ...updated };
+      showContactPicker.value = false;
+    }
+
+    async function contactAboutOrder(order) {
+      if (!order) return;
+      activeTab.value = 2;
+      await ensureConversationLoaded();
+      if (!conversationMessages.value.length) {
+        await loadConversationMessages(0);
+      }
+      await sendOrderCard(order);
+    }
+
+    async function openGeneralConversation() {
+      activeTab.value = 2;
+      await ensureConversationLoaded();
+      if (!conversationMessages.value.length) {
+        await loadConversationMessages(0);
       }
     }
 
-    function openDetail(g) {
-      detailGood.value = g;
-      try { detailImages.value = JSON.parse(g.detail_images || '[]'); } catch { detailImages.value = []; }
+    async function pollConversation() {
+      if (!conversation.value) {
+        await loadConversationSummary();
+        return;
+      }
+      if (activeTab.value !== 2) {
+        await loadConversationSummary();
+        return;
+      }
+      const lastId = conversationMessages.value.length
+        ? conversationMessages.value[conversationMessages.value.length - 1].id
+        : 0;
+      const newer = await api(`/conversation/messages?after_id=${lastId}`);
+      if (newer.length) {
+        conversationMessages.value.push(...newer);
+        await api('/conversation/read', {
+          method: 'POST',
+          body: JSON.stringify({ last_message_id: conversationMessages.value[conversationMessages.value.length - 1].id }),
+        });
+        if (conversation.value) conversation.value.unread_count = 0;
+        await loadConversationSummary();
+        await nextTick();
+        scrollConversationToBottom(true);
+      } else {
+        await loadConversationSummary();
+      }
+    }
+
+    function openDetail(good) {
+      detailGood.value = good;
+      try {
+        detailImages.value = JSON.parse(good.detail_images || '[]');
+      } catch {
+        detailImages.value = [];
+      }
       showDetail.value = true;
     }
+
     function previewImage(index) {
       vant.ImagePreview({ images: detailImages.value, startPosition: index });
     }
 
-    function openBook(g) {
-      bookGood.value = g;
+    function openBook(good) {
+      bookGood.value = good;
       initDateOptions();
       bookForm.value = { phone: '', date: dateOptions.value[0]?.value || '', timeSlot: '', quantity: 1 };
       showBook.value = true;
     }
+
     async function submitOrder() {
       if (submitting.value) return;
       if (!/^1\d{10}$/.test(bookForm.value.phone)) {
@@ -655,7 +760,7 @@ const app = createApp({
             phone: bookForm.value.phone,
             address: '',
             quantity: bookForm.value.quantity,
-            appointment_time: bookForm.value.date + ' ' + bookForm.value.timeSlot,
+            appointment_time: `${bookForm.value.date} ${bookForm.value.timeSlot}`,
           }),
         });
 
@@ -663,12 +768,11 @@ const app = createApp({
           await api(`/pay/mock/confirm/${res.order_id}`, { method: 'POST' });
           showBook.value = false;
           vant.showToast('下单成功');
-          try { await loadOrders(); } catch {}
+          await loadOrders();
           activeTab.value = 1;
           return;
         }
 
-        // 真实支付：调 WeixinJSBridge 公众号支付（V3 signType=RSA）
         const payParams = res.pay_params;
         unpaidOrderId = res.order_id;
         await new Promise((resolve, reject) => {
@@ -683,11 +787,11 @@ const app = createApp({
                 signType: payParams.signType,
                 paySign: payParams.paySign,
               },
-              function (res) {
-                if (res.err_msg === 'get_brand_wcpay_request:ok') {
+              function (wxRes) {
+                if (wxRes.err_msg === 'get_brand_wcpay_request:ok') {
                   resolve();
                 } else {
-                  reject(new Error(res.err_msg));
+                  reject(new Error(wxRes.err_msg));
                 }
               }
             );
@@ -701,13 +805,12 @@ const app = createApp({
 
         showBook.value = false;
         vant.showToast('支付成功');
-        loadOrders();
+        await loadOrders();
         activeTab.value = 1;
       } catch (e) {
         const msg = e.message || e.errMsg || e;
-        if (msg.includes('cancel') || msg.includes('get_brand_wcpay_request:cancel')) {
+        if (String(msg).includes('cancel') || String(msg).includes('get_brand_wcpay_request:cancel')) {
           vant.showToast('已取消支付');
-          // 关闭未支付订单，清理数据库
           if (unpaidOrderId) {
             try { await api(`/pay/close/${unpaidOrderId}`, { method: 'POST' }); } catch {}
           }
@@ -718,18 +821,22 @@ const app = createApp({
         submitting.value = false;
       }
     }
+
     function openOrderDetail(order) {
       currentOrder.value = order;
     }
+
     async function refundOrder(order) {
       try {
         await vant.showConfirmDialog({ title: '确认退款', message: '确认申请退款？退款将原路返回。' });
-      } catch { return; }
+      } catch {
+        return;
+      }
       submitting.value = true;
       try {
         await api(`/pay/refund/${order.id}`, { method: 'POST', body: JSON.stringify({}) });
         vant.showToast('退款申请已提交');
-        loadOrders();
+        await loadOrders();
         closeOrderDetail();
       } catch (e) {
         vant.showToast('退款失败: ' + (e.message || e));
@@ -737,158 +844,83 @@ const app = createApp({
         submitting.value = false;
       }
     }
+
     function closeOrderDetail() {
       currentOrder.value = null;
     }
+
     async function viewOrderGood(order) {
-      const g = goods.value.find(g => g.id === order.good_id);
-      if (g) return openDetail(g);
-      // 商品不在本地列表（可能已下架），从后端获取
+      const good = goods.value.find(item => item.id === order.good_id);
+      if (good) {
+        openDetail(good);
+        return;
+      }
       try {
         const resp = await api('/goods/' + order.good_id);
         if (resp) openDetail(resp);
-      } catch { vant.showToast('商品已删除'); }
-    }
-    async function sendMessage() {
-      if (!msgInput.value.trim() || !currentOrder.value) return;
-      try {
-        const sent = await api('/chat', {
-          method: 'POST',
-          body: JSON.stringify({ thread_type: 'order', thread_id: currentOrder.value.id, content: msgInput.value })
-        });
-        msgInput.value = '';
-        messages.value.push(sent);
-        orderMessageCache.value[currentOrder.value.id] = [...messages.value];
-        markRead('order', currentOrder.value.id);
-        await nextTick();
-        if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
-      } catch (e) { vant.showToast('发送失败'); }
+      } catch {
+        vant.showToast('商品已删除');
+      }
     }
 
-    function sameMessages(a, b) {
-      if (a.length !== b.length) return false;
-      for (let i = 0; i < a.length; i++) {
-        if (a[i].id !== b[i].id) return false;
-      }
-      return true;
+    function statusText(status) {
+      return { 0: '待付款', 1: '已下单', 2: '已完成', 3: '退款中', 4: '已退款' }[status] ?? '未知';
     }
-    function mergeConversations(list) {
-      const prevMap = new Map(conversations.value.map(item => [item.thread_id, item]));
-      conversations.value = list.map(item => {
-        const prev = prevMap.get(item.thread_id);
-        return prev ? Object.assign(prev, item) : item;
-      });
-      if (activeConv.value) {
-        const nextActive = conversations.value.find(item => item.thread_id === activeConv.value.thread_id);
-        if (nextActive) activeConv.value = nextActive;
-      }
-    }
-    async function loadConversations() {
-      try {
-        const list = await api('/chat/conversations');
-        mergeConversations(list);
-      } catch {}
-    }
-    async function openConversation(conv) {
-      activeConv.value = conv;
-      const key = conv.thread_id;
-      const cached = convMessageCache.value[key] ? [...convMessageCache.value[key]] : [];
-      convMessages.value = cached;
-      const loaded = await api(`/chat/${conv.thread_type}/${key}?after_id=0`);
-      if (!sameMessages(cached, loaded)) convMessages.value = loaded;
-      convMessageCache.value[key] = [...loaded];
-      if (loaded.length) markRead(conv.thread_type, key);
-      else if (conv.last_msg_id) markRead(conv.thread_type, key);
-      await nextTick();
-      if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
-    }
-    function closeConversation() {
-      activeConv.value = null;
-      convMessages.value = [];
-    }
-    async function pollConvChat() {
-      if (!activeConv.value) return;
-      const key = activeConv.value.thread_id;
-      const lastId = convMessages.value.length ? convMessages.value[convMessages.value.length - 1].id : 0;
-      const newMsgs = await api(`/chat/${activeConv.value.thread_type}/${key}?after_id=${lastId}`);
-      if (newMsgs.length) {
-        convMessages.value.push(...newMsgs);
-        convMessageCache.value[key] = [...convMessages.value];
-        markRead(activeConv.value.thread_type, key);
-        await nextTick();
-        if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
-      }
-    }
-    async function startConsult(good) {
-      try {
-        const res = await api('/consult', {
-          method: 'POST',
-          body: JSON.stringify({ good_id: good.id })
-        });
-        showDetail.value = false;
-        activeTab.value = 2;
-        const conv = { thread_type: res.thread_type, thread_id: res.thread_id, good_title: res.good_title, good_img_url: res.good_img_url };
-        activeConv.value = conv;
-        const key = res.thread_id;
-        const cached = convMessageCache.value[key] ? [...convMessageCache.value[key]] : [];
-        convMessages.value = cached;
-        const loaded = await api(`/chat/${res.thread_type}/${key}?after_id=0`);
-        if (!sameMessages(cached, loaded)) convMessages.value = loaded;
-        convMessageCache.value[key] = [...loaded];
-        await nextTick();
-        if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
-      } catch (e) {
-        vant.showToast('咨询失败，请重试');
-      }
-    }
-    async function sendConvMessage() {
-      if (!convMsgInput.value.trim() || !activeConv.value) return;
-      try {
-        const sent = await api('/chat', {
-          method: 'POST',
-          body: JSON.stringify({ thread_type: activeConv.value.thread_type, thread_id: activeConv.value.thread_id, content: convMsgInput.value })
-        });
-        convMsgInput.value = '';
-        convMessages.value.push(sent);
-        convMessageCache.value[activeConv.value.thread_id] = [...convMessages.value];
-        markRead(activeConv.value.thread_type, activeConv.value.thread_id);
-        await nextTick();
-        if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
-      } catch (e) { vant.showToast('发送失败'); }
-    }
-    // 切换到消息Tab时自动加载会话列表
-    watch(activeTab, async (tab) => {
-      if (tab === 2) {
-        await loadConversations();
-        await nextTick();
-        if (activeConv.value && convChatBox.value) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
-      }
-    });
-    watch(activeConv, async (conv) => {
-      if (conv) {
-        await nextTick();
-        if (convChatBox.value && isNearBottom(convChatBox.value)) convChatBox.value.scrollTop = convChatBox.value.scrollHeight;
-      }
-    });
 
-    function formatPrice(fen) { return (fen / 100).toFixed(2); }
-    function isNearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
+    function statusColor(status) {
+      return { 0: '#787890', 1: '#d4a03c', 2: '#07c160', 3: '#e6a23c', 4: '#c0564a' }[status] ?? '#787890';
+    }
 
-    function statusText(s) { return {0:'待付款',1:'已下单',2:'已完成',3:'退款中',4:'已退款'}[s] ?? '未知'; }
-    function statusColor(s) { return {0:'#787890',1:'#d4a03c',2:'#07c160',3:'#e6a23c',4:'#c0564a'}[s] ?? '#787890'; }
-    function statusClass(s) { return {0:'status-unpaid',1:'status-pending',2:'status-completed',3:'status-pending',4:'status-unpaid'}[s] ?? 'status-unpaid'; }
-    function roleLabel(r) { return { CUSTOMER: '客户', MERCHANT: '商家' }[r] || r; }
+    function statusClass(status) {
+      return { 0: 'status-unpaid', 1: 'status-pending', 2: 'status-completed', 3: 'status-pending', 4: 'status-unpaid' }[status] ?? 'status-unpaid';
+    }
+
+    function roleLabel(role) {
+      return { CUSTOMER: '客户', MERCHANT: '商家' }[role] || role;
+    }
+
     function formatTime(ts) {
-      const d = new Date(ts * 1000);
+      const d = new Date(Number(ts || 0) * 1000);
       const now = new Date();
       const pad = n => String(n).padStart(2, '0');
-      const time = pad(d.getHours()) + ':' + pad(d.getMinutes());
-      const isToday = d.toDateString() === now.toDateString();
-      if (isToday) return time;
-      const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+      const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      if (d.toDateString() === now.toDateString()) return time;
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
       if (d.toDateString() === yesterday.toDateString()) return '昨天 ' + time;
-      return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + time;
+      return `${d.getMonth() + 1}/${d.getDate()} ${time}`;
     }
+
+    function retryLogin() {
+      loginError.value = false;
+      localStorage.removeItem('wx_token');
+      location.reload();
+    }
+
+    async function handlePoll() {
+      await loadOrders();
+      await pollConversation();
+    }
+
+    const handleResize = () => scrollConversationToBottom();
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      } else if (ready.value) {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(handlePoll, 5000);
+        loadOrders();
+        loadConversationSummary();
+      }
+    };
+
+    watch(activeTab, async tab => {
+      if (tab === 2) {
+        await ensureConversationLoaded();
+        await loadConversationMessages(0);
+      }
+    });
 
     onMounted(async () => {
       try {
@@ -897,48 +929,80 @@ const app = createApp({
         ready.value = true;
         loginError.value = false;
         wxJSSDKInit();
-        loadGoods();
-        loadOrders();
-        loadMe();
-        loadConversations();
-        pollTimer = setInterval(pollChat, 5000);
-        window.addEventListener('resize', () => {
-          if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
-        });
+        await Promise.all([
+          loadGoods(),
+          loadOrders(),
+          loadMe(),
+          loadConversationSummary(),
+          loadMerchantContacts(),
+        ]);
+        pollTimer = setInterval(handlePoll, 5000);
+        window.addEventListener('resize', handleResize);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
       } catch (e) {
         console.error('登录失败:', e);
         loginError.value = true;
       }
     });
 
-    function retryLogin() {
-      loginError.value = false;
-      localStorage.removeItem('wx_token');
-      location.reload();
-    }
-
-    onUnmounted(() => { clearInterval(pollTimer); pollTimer = null; });
-
-    // 页面可见性：切后台暂停轮询，回前台恢复
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        clearInterval(pollTimer); pollTimer = null;
-      } else if (ready.value) {
-        if (pollTimer) clearInterval(pollTimer);
-        pollTimer = setInterval(pollChat, 5000);
-        loadOrders(); loadConversations();
-      }
+    onUnmounted(() => {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     });
 
     return {
-      ready, loginError, activeTab, goods, orders, user, userId, messages, currentOrder, msgInput,
-      chatBox, showBook, bookGood, bookForm, submitting,
-      showDetail, detailGood, detailImages, timeSlots, dateOptions, showContact, contactInfo,
-      conversations, activeConv, convMessages, convMsgInput, convChatBox,
-      openBook, submitOrder, refundOrder, openOrderDetail, closeOrderDetail, viewOrderGood, sendMessage, openDetail, previewImage,
-      startConsult,
-      openConversation, closeConversation, sendConvMessage, contactMerchant, copyText,
-      unreadCount, statusText, statusColor, statusClass, roleLabel, formatTime, formatPrice, retryLogin, orderStats, orderFilter, filteredOrders, goToOrders, clearFilter
+      ready,
+      loginError,
+      activeTab,
+      goods,
+      orders,
+      user,
+      currentOrder,
+      showBook,
+      bookGood,
+      bookForm,
+      submitting,
+      showDetail,
+      detailGood,
+      detailImages,
+      conversation,
+      conversationMessages,
+      conversationInput,
+      conversationBox,
+      merchantContacts,
+      showContactPicker,
+      showOrderPicker,
+      timeSlots,
+      dateOptions,
+      orderStats,
+      orderFilter,
+      filteredOrders,
+      selectedOrderList,
+      openBook,
+      submitOrder,
+      refundOrder,
+      openOrderDetail,
+      closeOrderDetail,
+      viewOrderGood,
+      openDetail,
+      previewImage,
+      sendConversationText,
+      sendOrderCard,
+      switchMerchantContact,
+      contactAboutOrder,
+      openGeneralConversation,
+      unreadCount,
+      statusText,
+      statusColor,
+      statusClass,
+      roleLabel,
+      formatTime,
+      formatPrice,
+      retryLogin,
+      goToOrders,
+      clearFilter,
     };
   }
 });

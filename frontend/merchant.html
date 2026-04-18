@@ -55,7 +55,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
 .order-detail-label { color: var(--text-secondary); }
 .order-detail-value { color: var(--text-title); font-weight: 500; }
 .bubble-time { font-size: 10px; color: var(--text-secondary); margin-top: 4px; }
-.bubble-right .bubble-role { display: none; }
+.bubble-right .bubble-role { text-align: right; color: #8aad8a; }
 .bubble-right .bubble-time { text-align: right; color: #8aad8a; }
 .filter-bar { display: flex; gap: 8px; padding: 0 16px 8px; overflow-x: auto; }
 .filter-tag { flex-shrink: 0; padding: 6px 14px; border-radius: 16px; font-size: 13px; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border); cursor: pointer; }
@@ -106,8 +106,8 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
 
   <template v-else>
   <van-tabbar v-model="activeTab">
-    <van-tabbar-item icon="orders-o" :dot="!!unreadCount">订单</van-tabbar-item>
-    <van-tabbar-item icon="chat-o">沟通</van-tabbar-item>
+    <van-tabbar-item icon="orders-o">订单</van-tabbar-item>
+    <van-tabbar-item icon="chat-o" :dot="!!unreadCount">沟通</van-tabbar-item>
     <van-tabbar-item icon="shop-o">商品</van-tabbar-item>
     <van-tabbar-item icon="bar-chart-o">统计</van-tabbar-item>
   </van-tabbar>
@@ -119,7 +119,7 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       <div class="detail-header">
         <span class="back-arrow" @click="closeOrderDetail">‹</span>
         <span style="font-weight:600;color:var(--text-title);">订单详情</span>
-        <span class="order-status" :style="{background: detailOrder.thread_type === 'consultation' ? '#5b8dd9' : statusColor(detailOrder.status), marginLeft:'auto'}">{{ detailOrder.thread_type === 'consultation' ? '咨询' : statusText(detailOrder.status) }}</span>
+        <span class="order-status" :style="{background: statusColor(detailOrder.status), marginLeft:'auto'}">{{ statusText(detailOrder.status) }}</span>
       </div>
       <!-- 商品信息 -->
       <div class="order-detail-card">
@@ -144,10 +144,9 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
         <div class="order-detail-row"><span class="order-detail-label">数量</span><span class="order-detail-value">{{ detailOrder.quantity || 1 }}</span></div>
       </div>
       <!-- 操作按钮 -->
-      <div v-if="detailOrder.thread_type !== 'consultation'" style="padding:0 10px;display:flex;gap:8px;">
+      <div style="padding:0 10px;display:flex;gap:8px;">
         <van-button v-if="detailOrder.status===1" size="small" type="success" @click="completeOrder(detailOrder.id)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">完成</van-button>
         <van-button v-if="[1,2].includes(detailOrder.status)" size="small" type="danger" plain @click="refundOrderAction(detailOrder)" :loading="actionLoading" :disabled="actionLoading" style="flex:1;">退款</van-button>
-        <van-button size="small" plain @click="goToChat(detailOrder)" style="flex:1;color:var(--gold);border-color:var(--gold);">进入会话</van-button>
       </div>
     </div>
     <!-- 订单列表视图 -->
@@ -163,16 +162,13 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       <div v-if="!filteredOrders.length" style="text-align:center;padding:60px 0;color:var(--text-secondary);font-size:13px;">暂无订单</div>
       <div v-for="o in filteredOrders" :key="o.id" class="order-card" @click="openOrderDetail(o)">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span v-if="o.unread_count" class="unread-dot"></span>
-            <span style="font-weight:600;color:var(--text-title);">{{ o.good_title || o.id.slice(-8) }}</span>
-          </div>
-          <span class="order-status" :style="{background: o.thread_type === 'consultation' ? '#5b8dd9' : statusColor(o.status)}">{{ o.thread_type === 'consultation' ? '咨询' : statusText(o.status) }}</span>
+          <span style="font-weight:600;color:var(--text-title);">{{ o.good_title || o.id.slice(-8) }}</span>
+          <span class="order-status" :style="{background: statusColor(o.status)}">{{ statusText(o.status) }}</span>
         </div>
         <div style="font-size:13px;color:var(--text-body);margin-top:6px;">{{ o.phone }}</div>
         <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">预约: {{ o.appointment_time }}</div>
         <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ formatPrice(o.total_fee) }}<span v-if="o.quantity > 1" style="font-size:12px;color:var(--text-secondary);margin-left:4px;">x{{ o.quantity }}</span></div>
-        <div v-if="o.thread_type !== 'consultation'" style="margin-top:10px;display:flex;gap:8px;" @click.stop>
+        <div style="margin-top:10px;display:flex;gap:8px;" @click.stop>
           <van-button v-if="o.status===1" size="small" type="success" @click="completeOrder(o.id)" :loading="actionLoading" :disabled="actionLoading">完成</van-button>
         </div>
       </div>
@@ -181,51 +177,55 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
 
   <!-- 沟通 -->
   <div v-show="activeTab === 1" style="padding-bottom:60px;">
-    <!-- 会话列表 -->
-    <div v-if="!currentOrder">
+    <div v-if="!currentConversation">
       <div style="padding:12px 16px;font-weight:600;font-size:16px;color:var(--text-title);">会话</div>
       <div v-if="!conversations.length" style="text-align:center;padding:60px 0;color:var(--text-secondary);font-size:13px;">暂无会话</div>
-      <div v-for="o in conversations" :key="o.id" class="order-card" @click="openChat(o)">
+      <div v-for="conv in conversations" :key="conv.conversation_id" class="order-card" @click="openConversation(conv)">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
-            <span v-if="o.unread_count" class="unread-badge">{{ o.unread_count }}</span>
-            <span style="font-weight:600;color:var(--text-title);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ convTitle(o) }}</span>
-            <span class="order-status" :style="{background: o.thread_type === 'consultation' ? '#5b8dd9' : statusColor(o.status), fontSize:'10px', padding:'1px 6px'}">{{ o.thread_type === 'consultation' ? '咨询' : statusText(o.status) }}</span>
+            <span v-if="conv.unread_count" class="unread-badge">{{ conv.unread_count }}</span>
+            <span style="font-weight:600;color:var(--text-title);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              {{ conv.customer_nickname || ('客户 #' + conv.customer_id) }}
+            </span>
           </div>
-          <span class="conv-time">{{ formatTime(o.last_msg_time) }}</span>
+          <span class="conv-time">{{ formatTime(conv.last_message_time) }}</span>
         </div>
-        <div class="conv-preview">{{ o.last_sender_role === 'MERCHANT' ? '我: ' : '' }}{{ o.last_content }}</div>
+        <div class="conv-preview">{{ conv.default_merchant_contact?.name || '未分配客服' }} · {{ conv.last_message_preview }}</div>
       </div>
     </div>
-    <!-- 聊天视图 -->
     <div v-else class="chat-wrap">
       <div class="detail-header">
-        <span class="back-arrow" @click="closeChat">‹</span>
+        <span class="back-arrow" @click="closeConversation">‹</span>
         <div style="flex:1;">
-          <div style="font-weight:600;color:var(--text-title);">{{ convTitle(currentOrder) }}</div>
+          <div style="font-weight:600;color:var(--text-title);">{{ currentConversation.customer_nickname || ('客户 #' + currentConversation.customer_id) }}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">当前接待：{{ currentConversation.default_merchant_contact?.name || '未分配' }}</div>
         </div>
-        <span class="order-status" :style="{background: currentOrder.thread_type === 'consultation' ? '#5b8dd9' : statusColor(currentOrder.status)}">{{ currentOrder.thread_type === 'consultation' ? '咨询' : statusText(currentOrder.status) }}</span>
-      </div>
-      <!-- 订单详情卡片 -->
-      <div v-if="currentOrder.thread_type !== 'consultation'" class="order-detail-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:15px;color:var(--gold);font-weight:700;">¥{{ formatPrice(currentOrder.total_fee) }}</span>
-          <span style="font-size:12px;color:var(--text-secondary);">预约: {{ currentOrder.appointment_time }}</span>
-        </div>
-        <div class="order-detail-row"><span class="order-detail-label">客户电话</span><span class="order-detail-value">{{ currentOrder.phone }}</span></div>
-        <div v-if="currentOrder.status === 1 || currentOrder.status === 2" style="margin-top:10px;display:flex;gap:8px;">
-          <van-button v-if="currentOrder.status===1" size="small" type="success" @click="completeOrder(currentOrder.id)">完成</van-button>
+        <div style="display:flex;gap:8px;">
+          <van-button size="mini" plain @click="showContactPicker = true">切换客服</van-button>
+          <van-button size="mini" type="primary" @click="showOrderPicker = true">发送订单</van-button>
         </div>
       </div>
       <div class="chat-messages" ref="chatBox">
         <div v-if="!messages.length" style="text-align:center;padding:40px 0;color:var(--text-secondary);font-size:13px;">暂无消息</div>
-        <div v-for="m in messages" :key="m.id"
-             :class="['bubble', m.sender_role==='MERCHANT' ? 'bubble-right' : 'bubble-left']"
-             style="display:flex;flex-direction:column;">
-          <div class="bubble-role">{{ m.sender_role === 'MERCHANT' ? '商家' : (currentOrder?.customer_nickname || '客户') }}</div>
-          <div>{{ m.content }}</div>
-          <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
-        </div>
+        <template v-for="m in messages" :key="m.id">
+          <div v-if="m.message_type === 'text'"
+               :class="['bubble', m.sender_role==='MERCHANT' ? 'bubble-right' : 'bubble-left']"
+               style="display:flex;flex-direction:column;">
+            <div class="bubble-role">{{ m.sender_role === 'MERCHANT' ? (m.merchant_contact_name || currentConversation.default_merchant_contact?.name || '商家') : (currentConversation.customer_nickname || '客户') }}</div>
+            <div>{{ m.content }}</div>
+            <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
+          </div>
+          <div v-else
+               :class="['bubble', m.sender_role==='MERCHANT' ? 'bubble-right' : 'bubble-left']"
+               style="display:flex;flex-direction:column;">
+            <div class="bubble-role">{{ m.sender_role === 'MERCHANT' ? (m.merchant_contact_name || currentConversation.default_merchant_contact?.name || '商家') : (currentConversation.customer_nickname || '客户') }}</div>
+            <div style="font-weight:600;">[订单] {{ m.payload?.good_title || '商品' }}</div>
+            <div style="font-size:12px;margin-top:4px;">订单号 {{ m.order_id.slice(-8) }}</div>
+            <div style="font-size:12px;">预约：{{ m.payload?.appointment_time || '未预约' }}</div>
+            <div style="font-size:12px;">金额：¥{{ formatPrice(m.payload?.total_fee || 0) }}</div>
+            <div class="bubble-time">{{ formatTime(m.create_time) }}</div>
+          </div>
+        </template>
       </div>
       <div class="chat-input-bar">
         <input v-model="msgInput" placeholder="回复客户..." @keyup.enter="sendMessage">
@@ -233,6 +233,32 @@ body { background: #1a1a2e; font-family: -apple-system, BlinkMacSystemFont, sans
       </div>
     </div>
   </div>
+
+  <van-popup v-model:show="showContactPicker" position="bottom" round>
+    <div style="padding:20px;">
+      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:12px;">切换接待客服</div>
+      <div v-if="!merchantContacts.length" style="text-align:center;padding:20px 0;color:var(--text-secondary);font-size:13px;">暂无可用客服</div>
+      <div v-for="contact in merchantContacts" :key="contact.id" class="order-card" @click="switchConversationContact(contact)">
+        <div style="font-weight:600;color:var(--text-title);">{{ contact.name }}</div>
+        <div class="conv-preview">微信：{{ contact.wechat || '未填' }} · 手机：{{ contact.phone || '未填' }}</div>
+      </div>
+    </div>
+  </van-popup>
+
+  <van-popup v-model:show="showOrderPicker" position="bottom" round>
+    <div style="padding:20px;max-height:60vh;overflow-y:auto;">
+      <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:12px;">选择订单</div>
+      <div v-if="!conversationOrders.length" style="text-align:center;padding:20px 0;color:var(--text-secondary);font-size:13px;">当前客户暂无可发送订单</div>
+      <div v-for="order in conversationOrders" :key="order.id" class="order-card" @click="sendOrderCard(order)">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-weight:600;color:var(--text-title);">{{ order.good_title || '商品' }}</span>
+          <span class="order-status" :style="{background: statusColor(order.status)}">{{ statusText(order.status) }}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:6px;">订单号 {{ order.id.slice(-8) }} · {{ order.appointment_time }}</div>
+        <div style="font-size:15px;color:var(--gold);margin-top:4px;font-weight:700;">¥{{ formatPrice(order.total_fee) }}</div>
+      </div>
+    </div>
+  </van-popup>
 
   <!-- 商品管理 -->
   <div v-show="activeTab === 2" style="padding-bottom:60px;">
@@ -470,16 +496,72 @@ async function wxJSSDKInit() {
   } catch (e) { console.warn('JS-SDK 初始化失败:', e); }
 }
 
-const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
+const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
 
 const app = createApp({
   setup() {
     const API = '';
     const TOKEN = () => localStorage.getItem('wx_token') || '';
     const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
+
     const ready = ref(false);
     const loginError = ref(false);
     const actionLoading = ref(false);
+    const activeTab = ref(0);
+
+    const orders = ref([]);
+    const goods = ref([]);
+    const detailOrder = ref(null);
+    const conversations = ref([]);
+    const currentConversation = ref(null);
+    const messages = ref([]);
+    const msgInput = ref('');
+    const chatBox = ref(null);
+    const merchantContacts = ref([]);
+    const showContactPicker = ref(false);
+    const showOrderPicker = ref(false);
+    const stats = ref(null);
+
+    const orderFilter = ref(null);
+    const filteredOrders = computed(() => {
+      if (orderFilter.value === null) return orders.value;
+      return orders.value.filter(order => order.status === orderFilter.value);
+    });
+    const conversationOrders = computed(() => {
+      if (!currentConversation.value) return [];
+      return orders.value.filter(order =>
+        order.customer_id === currentConversation.value.customer_id &&
+        order.status >= 1
+      );
+    });
+    const unreadCount = computed(() => conversations.value.reduce((sum, item) => sum + (item.unread_count || 0), 0));
+    const statusDistList = computed(() => {
+      if (!stats.value) return [];
+      const dist = stats.value.status_dist || {};
+      const total = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
+      const items = [
+        { key: 'ordered', label: '已下单', color: '#d4a03c' },
+        { key: 'completed', label: '已完成', color: '#07c160' },
+        { key: 'refunding', label: '退款中', color: '#e6a23c' },
+        { key: 'refunded', label: '已退款', color: '#c0564a' },
+      ];
+      return items.filter(item => dist[item.key]).map(item => ({
+        ...item,
+        count: dist[item.key],
+        pct: Math.round((dist[item.key] / total) * 100),
+      }));
+    });
+
+    const showGoodForm = ref(false);
+    const isEditGood = ref(false);
+    const savingGood = ref(false);
+    const goodForm = ref({ id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', sales: '0', img_url: '', detailImages: [] });
+
+    let pollTimer = null;
+
+    function emptyGoodForm() {
+      return { id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', sales: '0', img_url: '', detailImages: [] };
+    }
 
     async function api(path, opts = {}) {
       const res = await fetch(API + path, { headers: headers(), ...opts });
@@ -492,51 +574,19 @@ const app = createApp({
       return res.json();
     }
 
-    const activeTab = ref(0);
-    const orders = ref([]);
-    const goods = ref([]);
-    const detailOrder = ref(null);  // 订单详情页
-    const currentOrder = ref(null);
-    const messages = ref([]);
-    const msgInput = ref('');
-    const chatBox = ref(null);
-    const stats = ref(null);
-    let pollTimer = null;
-
-    // ---- 未读追踪 ----
-    const orderFilter = ref(null);
-    const filteredOrders = computed(() => {
-      if (orderFilter.value === null) return orders.value;
-      return orders.value.filter(o => o.status === orderFilter.value);
-    });
-    const conversations = computed(() => orders.value.filter(o => o.last_msg_id > 0));
-    const unreadCount = computed(() => orders.value.reduce((sum, o) => sum + (o.unread_count || 0), 0));
-    const statusDistList = computed(() => {
-      if (!stats.value) return [];
-      const dist = stats.value.status_dist;
-      const total = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
-      const items = [
-        { key: 'ordered', label: '已下单', color: '#d4a03c' },
-        { key: 'completed', label: '已完成', color: '#07c160' },
-        { key: 'refunding', label: '退款中', color: '#e6a23c' },
-        { key: 'refunded', label: '已退款', color: '#c0564a' },
-      ];
-      return items.filter(it => dist[it.key]).map(it => ({
-        ...it, count: dist[it.key], pct: Math.round(dist[it.key] / total * 100)
-      }));
-    });
-    async function markRead(threadType, threadId) {
-      try { await api(`/chat/read/${threadType}/${threadId}`, { method: 'POST' }); } catch {}
+    function formatPrice(fen) {
+      return (Number(fen || 0) / 100).toFixed(2);
     }
 
-    // 商品表单
-    const showGoodForm = ref(false);
-    const isEditGood = ref(false);
-    const savingGood = ref(false);
-    const goodForm = ref({ id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', sales: '0', img_url: '', detailImages: [] });
+    function isNearBottom(el) {
+      return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    }
 
-    function emptyGoodForm() {
-      return { id: 0, title: '', description: '', priceYuan: '', originalPriceYuan: '', duration: '60', sales: '0', img_url: '', detailImages: [] };
+    function scrollChatToBottom(force = false) {
+      if (!chatBox.value) return;
+      if (force || isNearBottom(chatBox.value)) {
+        chatBox.value.scrollTop = chatBox.value.scrollHeight;
+      }
     }
 
     async function uploadImage(file) {
@@ -547,6 +597,7 @@ const app = createApp({
       const data = await res.json();
       return data.url;
     }
+
     async function uploadCover(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -554,9 +605,12 @@ const app = createApp({
         vant.showToast({ message: '上传中...', forbidClick: true, duration: 0 });
         goodForm.value.img_url = await uploadImage(file);
         vant.closeToast();
-      } catch (err) { vant.showToast('上传失败'); }
+      } catch {
+        vant.showToast('上传失败');
+      }
       e.target.value = '';
     }
+
     async function uploadDetail(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -565,167 +619,319 @@ const app = createApp({
         const url = await uploadImage(file);
         goodForm.value.detailImages.push(url);
         vant.closeToast();
-      } catch (err) { vant.showToast('上传失败'); }
+      } catch {
+        vant.showToast('上传失败');
+      }
       e.target.value = '';
     }
-    function removeDetailImg(i) {
-      goodForm.value.detailImages.splice(i, 1);
+
+    function removeDetailImg(index) {
+      goodForm.value.detailImages.splice(index, 1);
     }
 
     async function loadOrders() {
-      try { orders.value = await api('/orders/active'); } catch (e) { console.error('loadOrders:', e); }
-    }
-    async function loadGoods() {
-      try { goods.value = await api('/goods/all'); } catch (e) { console.error('loadGoods:', e); }
-    }
-    async function loadStats() {
-      try { stats.value = await api('/stats/dashboard'); } catch (e) { console.error('loadStats:', e); }
-    }
-    async function loadChat(threadType, threadId) {
-      messages.value = await api(`/chat/${threadType}/${threadId}?after_id=0`);
-      if (messages.value.length) markRead(threadType, threadId);
-      await nextTick();
-      if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
-    }
-    async function pollChat() {
-      if (!currentOrder.value) return;
-      const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
-      const newMsgs = await api(`/chat/${currentOrder.value.thread_type}/${currentOrder.value.thread_id}?after_id=${lastId}`);
-      if (newMsgs.length) {
-        messages.value.push(...newMsgs);
-        markRead(currentOrder.value.thread_type, currentOrder.value.thread_id);
-        await nextTick();
-        if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+      try {
+        orders.value = await api('/orders/active');
+      } catch (e) {
+        console.error('loadOrders:', e);
       }
     }
 
-    function openOrderDetail(o) { detailOrder.value = o; }
-    function closeOrderDetail() { detailOrder.value = null; }
-    function goToChat(order) { detailOrder.value = null; currentOrder.value = order; activeTab.value = 1; loadChat(order.thread_type, order.thread_id); }
-    function openChat(order) { currentOrder.value = order; activeTab.value = 1; loadChat(order.thread_type, order.thread_id); }
-    function closeChat() { currentOrder.value = null; messages.value = []; }
+    async function loadGoods() {
+      try {
+        goods.value = await api('/goods/all');
+      } catch (e) {
+        console.error('loadGoods:', e);
+      }
+    }
+
+    async function loadStats() {
+      try {
+        stats.value = await api('/stats/dashboard');
+      } catch (e) {
+        console.error('loadStats:', e);
+      }
+    }
+
+    async function loadConversations() {
+      try {
+        const list = await api('/merchant/conversations');
+        conversations.value = list;
+        if (currentConversation.value) {
+          const next = list.find(item => item.conversation_id === currentConversation.value.conversation_id);
+          if (next) currentConversation.value = { ...currentConversation.value, ...next };
+        }
+      } catch (e) {
+        console.error('loadConversations:', e);
+      }
+    }
+
+    async function loadMerchantContacts() {
+      try {
+        merchantContacts.value = await api('/merchant-contacts');
+      } catch (e) {
+        console.error('loadMerchantContacts:', e);
+      }
+    }
+
+    async function openConversation(conv) {
+      currentConversation.value = { ...conv };
+      messages.value = await api(`/merchant/conversations/${conv.conversation_id}/messages?after_id=0`);
+      if (messages.value.length) {
+        await api(`/merchant/conversations/${conv.conversation_id}/read`, {
+          method: 'POST',
+          body: JSON.stringify({ last_message_id: messages.value[messages.value.length - 1].id }),
+        });
+        currentConversation.value.unread_count = 0;
+        const idx = conversations.value.findIndex(item => item.conversation_id === conv.conversation_id);
+        if (idx >= 0) conversations.value[idx] = { ...conversations.value[idx], unread_count: 0 };
+      }
+      await nextTick();
+      scrollChatToBottom(true);
+    }
+
+    function closeConversation() {
+      currentConversation.value = null;
+      messages.value = [];
+      msgInput.value = '';
+      showOrderPicker.value = false;
+    }
+
+    async function sendMessage() {
+      if (!msgInput.value.trim() || !currentConversation.value) return;
+      const sent = await api(`/merchant/conversations/${currentConversation.value.conversation_id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ message_type: 'text', content: msgInput.value }),
+      });
+      msgInput.value = '';
+      messages.value.push(sent);
+      await loadConversations();
+      await nextTick();
+      scrollChatToBottom(true);
+    }
+
+    async function sendOrderCard(order) {
+      if (!currentConversation.value) return;
+      const sent = await api(`/merchant/conversations/${currentConversation.value.conversation_id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ message_type: 'order_card', order_id: order.id }),
+      });
+      messages.value.push(sent);
+      showOrderPicker.value = false;
+      await loadConversations();
+      await nextTick();
+      scrollChatToBottom(true);
+    }
+
+    async function switchConversationContact(contact) {
+      if (!currentConversation.value) return;
+      const updated = await api(`/merchant/conversations/${currentConversation.value.conversation_id}/default-contact`, {
+        method: 'POST',
+        body: JSON.stringify({ merchant_contact_id: contact.id }),
+      });
+      currentConversation.value = { ...currentConversation.value, ...updated };
+      const idx = conversations.value.findIndex(item => item.conversation_id === updated.conversation_id);
+      if (idx >= 0) conversations.value[idx] = { ...conversations.value[idx], ...updated };
+      showContactPicker.value = false;
+    }
+
+    async function pollConversationMessages() {
+      if (!currentConversation.value) return;
+      const lastId = messages.value.length ? messages.value[messages.value.length - 1].id : 0;
+      const newer = await api(`/merchant/conversations/${currentConversation.value.conversation_id}/messages?after_id=${lastId}`);
+      if (newer.length) {
+        messages.value.push(...newer);
+        await api(`/merchant/conversations/${currentConversation.value.conversation_id}/read`, {
+          method: 'POST',
+          body: JSON.stringify({ last_message_id: messages.value[messages.value.length - 1].id }),
+        });
+        currentConversation.value.unread_count = 0;
+        await loadConversations();
+        await nextTick();
+        scrollChatToBottom(true);
+      } else {
+        await loadConversations();
+      }
+    }
+
+    function openOrderDetail(order) {
+      detailOrder.value = order;
+    }
+
+    function closeOrderDetail() {
+      detailOrder.value = null;
+    }
+
     async function completeOrder(id) {
       actionLoading.value = true;
-      try { await api(`/orders/${id}/complete`, { method: 'POST' }); vant.showToast('已完成'); loadOrders(); detailOrder.value = null; }
-      finally { actionLoading.value = false; }
+      try {
+        await api(`/orders/${id}/complete`, { method: 'POST' });
+        vant.showToast('已完成');
+        await loadOrders();
+        await loadStats();
+        detailOrder.value = null;
+      } finally {
+        actionLoading.value = false;
+      }
     }
+
     async function refundOrderAction(order) {
-      try { await vant.showConfirmDialog({ title: '确认退款', message: '确认对该订单进行退款？' }); } catch { return; }
+      try {
+        await vant.showConfirmDialog({ title: '确认退款', message: '确认对该订单进行退款？' });
+      } catch {
+        return;
+      }
       actionLoading.value = true;
       try {
         await api(`/pay/refund/${order.id}`, { method: 'POST', body: JSON.stringify({}) });
         vant.showToast('退款申请已提交');
-        loadOrders();
+        await loadOrders();
+        await loadStats();
         detailOrder.value = null;
-      } catch (e) { vant.showToast('退款失败: ' + (e.message || e)); }
-      finally { actionLoading.value = false; }
-    }
-    async function sendMessage() {
-      if (!msgInput.value.trim() || !currentOrder.value) return;
-      try {
-        const sent = await api('/chat', { method: 'POST', body: JSON.stringify({ thread_type: currentOrder.value.thread_type, thread_id: currentOrder.value.thread_id, content: msgInput.value }) });
-        msgInput.value = '';
-        messages.value.push(sent);
-        markRead(currentOrder.value.thread_type, currentOrder.value.thread_id);
-        await nextTick();
-        if (chatBox.value && isNearBottom(chatBox.value)) chatBox.value.scrollTop = chatBox.value.scrollHeight;
-      } catch (e) { vant.showToast('发送失败'); }
+      } catch (e) {
+        vant.showToast('退款失败: ' + (e.message || e));
+      } finally {
+        actionLoading.value = false;
+      }
     }
 
-    // ---- 商品管理 ----
     function openCreateGood() {
       isEditGood.value = false;
       goodForm.value = emptyGoodForm();
       showGoodForm.value = true;
     }
-    function openEditGood(g) {
+
+    function openEditGood(good) {
       isEditGood.value = true;
       let detailImages = [];
-      try { detailImages = JSON.parse(g.detail_images || '[]'); } catch {}
+      try {
+        detailImages = JSON.parse(good.detail_images || '[]');
+      } catch {}
       goodForm.value = {
-        id: g.id,
-        title: g.title,
-        description: g.description,
-        priceYuan: g.price ? String(g.price / 100) : '',
-        originalPriceYuan: g.original_price ? String(g.original_price / 100) : '',
-        duration: String(g.duration),
-        sales: String(g.sales || 0),
-        img_url: g.img_url,
+        id: good.id,
+        title: good.title,
+        description: good.description,
+        priceYuan: good.price ? String(good.price / 100) : '',
+        originalPriceYuan: good.original_price ? String(good.original_price / 100) : '',
+        duration: String(good.duration),
+        sales: String(good.sales || 0),
+        img_url: good.img_url,
         detailImages,
       };
       showGoodForm.value = true;
     }
+
     async function saveGoodForm() {
-      const f = goodForm.value;
-      if (!f.title.trim()) { vant.showToast('请输入商品名称'); return; }
-      if (!f.priceYuan || Number(f.priceYuan) <= 0) { vant.showToast('请输入有效价格'); return; }
+      const form = goodForm.value;
+      if (!form.title.trim()) {
+        vant.showToast('请输入商品名称');
+        return;
+      }
+      if (!form.priceYuan || Number(form.priceYuan) <= 0) {
+        vant.showToast('请输入有效价格');
+        return;
+      }
       savingGood.value = true;
       try {
-        const f = goodForm.value;
         const payload = {
-          title: f.title,
-          description: f.description,
-          price: Math.round(Number(f.priceYuan) * 100),
-          original_price: f.originalPriceYuan ? Math.round(Number(f.originalPriceYuan) * 100) : 0,
-          duration: Number(f.duration),
-          img_url: f.img_url,
-          sales: Number(f.sales || 0),
-          detail_images: JSON.stringify(f.detailImages),
+          title: form.title,
+          description: form.description,
+          price: Math.round(Number(form.priceYuan) * 100),
+          original_price: form.originalPriceYuan ? Math.round(Number(form.originalPriceYuan) * 100) : 0,
+          duration: Number(form.duration),
+          img_url: form.img_url,
+          sales: Number(form.sales || 0),
+          detail_images: JSON.stringify(form.detailImages),
         };
         if (isEditGood.value) {
-          await api(`/goods/${f.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+          await api(`/goods/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
           vant.showToast('已保存');
         } else {
           await api('/goods', { method: 'POST', body: JSON.stringify(payload) });
           vant.showToast('创建成功');
         }
         showGoodForm.value = false;
-        loadGoods();
+        await loadGoods();
       } finally {
         savingGood.value = false;
       }
     }
-    async function toggleGood(g) {
-      await api(`/goods/${g.id}`, { method: 'PUT', body: JSON.stringify({ is_active: !g.is_active }) });
-      vant.showToast(g.is_active ? '已下架' : '已上架');
-      loadGoods();
+
+    async function toggleGood(good) {
+      await api(`/goods/${good.id}`, { method: 'PUT', body: JSON.stringify({ is_active: !good.is_active }) });
+      vant.showToast(good.is_active ? '已下架' : '已上架');
+      await loadGoods();
     }
-    function confirmDeleteGood(g) {
-      vant.showConfirmDialog({ title: '确认删除', message: `删除商品「${g.title}」？此操作不可恢复。` })
-        .then(() => deleteGood(g.id))
+
+    function confirmDeleteGood(good) {
+      vant.showConfirmDialog({ title: '确认删除', message: `删除商品「${good.title}」？此操作不可恢复。` })
+        .then(() => deleteGood(good.id))
         .catch(() => {});
     }
+
     async function deleteGood(id) {
       await api(`/goods/${id}`, { method: 'DELETE' });
       vant.showToast('已删除');
-      loadGoods();
+      await loadGoods();
     }
 
-    function formatPrice(fen) { return (fen / 100).toFixed(2); }
-    function isNearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
-
-    function statusText(s) { return {0:'待付款',1:'已下单',2:'已完成',3:'退款中',4:'已退款'}[s] ?? '未知'; }
-    function statusColor(s) { return {0:'#787890',1:'#d4a03c',2:'#07c160',3:'#e6a23c',4:'#c0564a'}[s] ?? '#787890'; }
-    function roleLabel(r) { return { CUSTOMER:'客户', MERCHANT:'商家' }[r] || r; }
-    function convTitle(o) {
-      if (!o) return '';
-      const parts = [];
-      if (o.good_title) parts.push(o.good_title);
-      parts.push(o.id.slice(-6));
-      if (o.customer_nickname) parts.push(o.customer_nickname);
-      return parts.join(' · ');
+    function statusText(status) {
+      return { 0: '待付款', 1: '已下单', 2: '已完成', 3: '退款中', 4: '已退款' }[status] ?? '未知';
     }
+
+    function statusColor(status) {
+      return { 0: '#787890', 1: '#d4a03c', 2: '#07c160', 3: '#e6a23c', 4: '#c0564a' }[status] ?? '#787890';
+    }
+
     function formatTime(ts) {
-      const d = new Date(ts * 1000);
+      const d = new Date(Number(ts || 0) * 1000);
       const now = new Date();
       const pad = n => String(n).padStart(2, '0');
-      const time = pad(d.getHours()) + ':' + pad(d.getMinutes());
-      const isToday = d.toDateString() === now.toDateString();
-      if (isToday) return time;
-      const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+      const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      if (d.toDateString() === now.toDateString()) return time;
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
       if (d.toDateString() === yesterday.toDateString()) return '昨天 ' + time;
-      return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + time;
+      return `${d.getMonth() + 1}/${d.getDate()} ${time}`;
     }
+
+    function retryLogin() {
+      loginError.value = false;
+      localStorage.removeItem('wx_token');
+      location.reload();
+    }
+
+    async function handlePoll() {
+      await loadOrders();
+      if (activeTab.value === 1 && currentConversation.value) {
+        await pollConversationMessages();
+      } else {
+        await loadConversations();
+      }
+    }
+
+    const handleResize = () => scrollChatToBottom();
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      } else if (ready.value) {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(handlePoll, 5000);
+        loadOrders();
+        loadGoods();
+        loadStats();
+        loadConversations();
+      }
+    };
+
+    watch(activeTab, async tab => {
+      if (tab === 1) {
+        await loadConversations();
+      } else if (tab === 3 && !stats.value) {
+        await loadStats();
+      }
+    });
 
     onMounted(async () => {
       try {
@@ -734,40 +940,77 @@ const app = createApp({
         ready.value = true;
         loginError.value = false;
         wxJSSDKInit();
-        loadOrders(); loadGoods(); loadStats();
-        pollTimer = setInterval(() => { loadOrders(); pollChat(); }, 5000);
+        await Promise.all([
+          loadOrders(),
+          loadGoods(),
+          loadStats(),
+          loadConversations(),
+          loadMerchantContacts(),
+        ]);
+        pollTimer = setInterval(handlePoll, 5000);
+        window.addEventListener('resize', handleResize);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
       } catch (e) {
         console.error('登录失败:', e);
         loginError.value = true;
       }
     });
 
-    function retryLogin() {
-      loginError.value = false;
-      localStorage.removeItem('wx_token');
-      location.reload();
-    }
-
-    onUnmounted(() => { clearInterval(pollTimer); pollTimer = null; });
-
-    // 页面可见性：切后台暂停轮询，回前台恢复
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        clearInterval(pollTimer); pollTimer = null;
-      } else if (ready.value) {
-        if (pollTimer) clearInterval(pollTimer);
-        pollTimer = setInterval(() => { loadOrders(); pollChat(); }, 5000);
-        loadOrders(); loadGoods(); loadStats();
-      }
+    onUnmounted(() => {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     });
 
     return {
-      ready, loginError, activeTab, orders, filteredOrders, orderFilter, conversations, goods, detailOrder, currentOrder, messages, msgInput, chatBox, stats, statusDistList, actionLoading,
-      showGoodForm, isEditGood, savingGood, goodForm,
-      openOrderDetail, closeOrderDetail, goToChat, openChat, closeChat, completeOrder, refundOrderAction, sendMessage,
-      openCreateGood, openEditGood, saveGoodForm, toggleGood, confirmDeleteGood,
-      uploadCover, uploadDetail, removeDetailImg,
-      unreadCount, statusText, statusColor, roleLabel, convTitle, formatTime, formatPrice, retryLogin
+      ready,
+      loginError,
+      activeTab,
+      orders,
+      filteredOrders,
+      orderFilter,
+      conversations,
+      currentConversation,
+      goods,
+      detailOrder,
+      messages,
+      msgInput,
+      chatBox,
+      merchantContacts,
+      showContactPicker,
+      showOrderPicker,
+      stats,
+      statusDistList,
+      actionLoading,
+      showGoodForm,
+      isEditGood,
+      savingGood,
+      goodForm,
+      openOrderDetail,
+      closeOrderDetail,
+      openConversation,
+      closeConversation,
+      completeOrder,
+      refundOrderAction,
+      sendMessage,
+      sendOrderCard,
+      switchConversationContact,
+      openCreateGood,
+      openEditGood,
+      saveGoodForm,
+      toggleGood,
+      confirmDeleteGood,
+      uploadCover,
+      uploadDetail,
+      removeDetailImg,
+      unreadCount,
+      conversationOrders,
+      statusText,
+      statusColor,
+      formatTime,
+      formatPrice,
+      retryLogin,
     };
   }
 });
