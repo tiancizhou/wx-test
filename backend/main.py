@@ -1451,7 +1451,10 @@ async def update_contact_config(
 @app.get("/config/frontend")
 async def frontend_config():
     """前端配置：AppID、域名等"""
-    return {"app_id": settings.APP_ID, "base_url": ""}
+    app_id = settings.APP_ID.strip()
+    if not app_id:
+        raise HTTPException(503, "WX_APP_ID 未配置")
+    return {"app_id": app_id, "base_url": ""}
 
 
 # ============================================================

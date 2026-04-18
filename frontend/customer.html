@@ -414,19 +414,24 @@ body { background: var(--bg-primary); font-family: -apple-system, BlinkMacSystem
 
 <script>
 // ---- 前端配置 ----
-let WX_APP_ID = 'wx9e7f92a7fad7e40f';
+let WX_APP_ID = '';
 let BASE_URL = 'https://wx.qlc.xn--6qq986b3xl';
 const WX_OAUTH_BASE = 'https://open.weixin.qq.com/connect/oauth2/authorize';
 
 async function initConfig() {
-  try {
-    const res = await fetch('/config/frontend');
-    if (res.ok) {
-      const cfg = await res.json();
-      if (cfg.app_id) WX_APP_ID = cfg.app_id;
-      if (cfg.base_url) BASE_URL = cfg.base_url;
-    }
-  } catch {}
+  const res = await fetch('/config/frontend');
+  const cfg = await res.json().catch(() => null);
+  if (!res.ok) {
+    const detail = cfg && typeof cfg.detail === 'string' && cfg.detail.trim()
+      ? cfg.detail.trim()
+      : '前端配置获取失败';
+    throw new Error(detail);
+  }
+  if (!cfg || typeof cfg.app_id !== 'string' || !cfg.app_id.trim()) {
+    throw new Error('WX_APP_ID 未配置');
+  }
+  WX_APP_ID = cfg.app_id.trim();
+  if (cfg.base_url) BASE_URL = cfg.base_url;
 }
 
 async function wxLogin() {
@@ -447,6 +452,10 @@ async function wxLogin() {
       history.replaceState(null, '', location.pathname + (clean ? '?' + clean : ''));
       return data.token;
     }
+  }
+
+  if (!WX_APP_ID) {
+    throw new Error('WX_APP_ID 未配置');
   }
 
   const redirectUri = encodeURIComponent(BASE_URL + location.pathname);
