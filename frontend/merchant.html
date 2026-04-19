@@ -895,6 +895,9 @@ async function wxLogin() {
     }
   }
   if (!WX_APP_ID) {
+    await initConfig();
+  }
+  if (!WX_APP_ID) {
     throw new Error('WX_APP_ID 未配置');
   }
   const redirectUri = encodeURIComponent(BASE_URL + location.pathname);
@@ -918,6 +921,7 @@ const app = createApp({
     const API = '';
     const TOKEN = () => localStorage.getItem('wx_token') || '';
     const headers = () => ({ 'X-Token': TOKEN(), 'Content-Type': 'application/json' });
+    const rolePages = { CUSTOMER: '/customer', MERCHANT: '/merchant' };
 
     const ready = ref(false);
     const loginError = ref(false);
@@ -1035,6 +1039,33 @@ const app = createApp({
       }
       if (!res.ok) throw new Error(await res.text());
       return res.json();
+    }
+
+    function consumeVerifiedRole(expectedRole) {
+      const verifiedRole = sessionStorage.getItem('wx_verified_role');
+      const verifiedToken = sessionStorage.getItem('wx_verified_token');
+      sessionStorage.removeItem('wx_verified_role');
+      sessionStorage.removeItem('wx_verified_token');
+      if (!verifiedRole || verifiedToken !== TOKEN()) return '';
+      localStorage.setItem('wx_last_role', verifiedRole);
+      if (verifiedRole !== expectedRole && rolePages[verifiedRole] && rolePages[verifiedRole] !== location.pathname) {
+        location.replace(rolePages[verifiedRole]);
+        return null;
+      }
+      return verifiedRole;
+    }
+
+    async function ensureExpectedRole(expectedRole) {
+      const cachedRole = consumeVerifiedRole(expectedRole);
+      if (cachedRole === null) return null;
+      if (cachedRole) return { role: cachedRole };
+      const me = await api('/me');
+      localStorage.setItem('wx_last_role', me.role);
+      if (me.role !== expectedRole && rolePages[me.role] && rolePages[me.role] !== location.pathname) {
+        location.replace(rolePages[me.role]);
+        return null;
+      }
+      return me;
     }
 
     function formatPrice(fen) {
@@ -1560,9 +1591,9 @@ const app = createApp({
 
     onMounted(async () => {
       try {
-        await initConfig();
         await wxLogin();
-        localStorage.setItem('wx_last_role', 'MERCHANT');
+        const me = await ensureExpectedRole('MERCHANT');
+        if (!me) return;
         await ensureOrdersLoaded();
         ready.value = true;
         loginError.value = false;

@@ -27,7 +27,7 @@ def test_customer_and_merchant_pages_do_not_load_google_fonts():
         assert "fonts.gstatic.com" not in content
 
 
-def test_customer_and_merchant_pages_keep_last_role_cache_in_sync():
+def test_customer_and_merchant_pages_validate_server_role_before_syncing_cache():
     expected_roles = {
         "customer.html": "CUSTOMER",
         "merchant.html": "MERCHANT",
@@ -35,8 +35,25 @@ def test_customer_and_merchant_pages_keep_last_role_cache_in_sync():
 
     for page, role in expected_roles.items():
         content = (FRONTEND_DIR / page).read_text(encoding="utf-8")
-        assert f"localStorage.setItem('wx_last_role', '{role}');" in content
+        assert "async function ensureExpectedRole(expectedRole)" in content
+        assert "function consumeVerifiedRole(expectedRole)" in content
+        assert "sessionStorage.getItem('wx_verified_role')" in content
+        assert "sessionStorage.getItem('wx_verified_token')" in content
+        assert "const me = await api('/me');" in content
+        assert "localStorage.setItem('wx_last_role', me.role);" in content
+        assert "location.replace(rolePages[me.role]);" in content
+        assert f"ensureExpectedRole('{role}')" in content
+        assert f"localStorage.setItem('wx_last_role', '{role}');" not in content
         assert "localStorage.removeItem('wx_last_role');" in content
+
+
+def test_customer_page_parallelizes_role_check_with_goods_loading():
+    content = (FRONTEND_DIR / "customer.html").read_text(encoding="utf-8")
+
+    assert "const roleCheck = ensureExpectedRole('CUSTOMER');" in content
+    assert "const goodsRequest = loadGoods();" in content
+    assert "const role = await roleCheck;" in content
+    assert "await goodsRequest;" in content
 
 
 def test_customer_page_prioritizes_goods_and_defers_secondary_tabs():
@@ -48,7 +65,8 @@ def test_customer_page_prioritizes_goods_and_defers_secondary_tabs():
     assert "async function ensureMessageCenterReady(force = false)" in content
     assert "async function warmCustomerDeferredData()" in content
     assert "deferNonCriticalLoad(warmCustomerDeferredData);" in content
-    assert "await loadGoods();" in content
+    assert "const goodsRequest = loadGoods();" in content
+    assert "await goodsRequest;" in content
     assert """await Promise.all([
           loadGoods(),
           loadOrders(),

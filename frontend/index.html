@@ -160,6 +160,8 @@ let BASE_URL = 'https://wx.qlc.xn--6qq986b3xl';
 const WX_OAUTH_BASE = 'https://open.weixin.qq.com/connect/oauth2/authorize';
 const TOKEN_KEY = 'wx_token';
 const LAST_ROLE_KEY = 'wx_last_role';
+const VERIFIED_ROLE_KEY = 'wx_verified_role';
+const VERIFIED_TOKEN_KEY = 'wx_verified_token';
 const ROLE_PAGES = {
   CUSTOMER: '/customer',
   MERCHANT: '/merchant',
@@ -177,6 +179,8 @@ function setStatus(text) {
 function clearSessionCache() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(LAST_ROLE_KEY);
+  sessionStorage.removeItem(VERIFIED_ROLE_KEY);
+  sessionStorage.removeItem(VERIFIED_TOKEN_KEY);
 }
 
 function routeToRole(role) {
@@ -220,13 +224,19 @@ async function loadFrontendConfig() {
   if (cfg.base_url) BASE_URL = cfg.base_url;
 }
 
+function rememberVerifiedRole(token, user) {
+  localStorage.setItem(LAST_ROLE_KEY, user.role);
+  sessionStorage.setItem(VERIFIED_ROLE_KEY, user.role);
+  sessionStorage.setItem(VERIFIED_TOKEN_KEY, token);
+}
+
 async function fetchRole(token) {
   const res = await fetch('/me', { headers: { 'X-Token': token } });
   if (!res.ok) {
     throw new Error('获取用户信息失败');
   }
   const user = await res.json();
-  localStorage.setItem(LAST_ROLE_KEY, user.role);
+  rememberVerifiedRole(token, user);
   return user.role;
 }
 
@@ -260,13 +270,20 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   const code = params.get('code');
 
-  if (token && lastRole && ROLE_PAGES[lastRole]) {
-    setStatus('正在进入上次使用的页面...');
-    routeToRole(lastRole);
-    return;
-  }
-
   try {
+    if (token && lastRole === 'CUSTOMER' && ROLE_PAGES[lastRole]) {
+      setStatus('正在进入上次使用的页面...');
+      routeToRole(lastRole);
+      return;
+    }
+
+    if (token && lastRole === 'MERCHANT') {
+      setStatus('正在确认商家身份...');
+      const role = await fetchRole(token);
+      routeToRole(role);
+      return;
+    }
+
     if (code) {
       setStatus('正在确认微信身份...');
       const freshToken = await exchangeCodeForToken(code);

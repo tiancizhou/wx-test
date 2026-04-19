@@ -33,3 +33,15 @@ def test_home_page_caches_last_role_for_direct_routing():
     assert "localStorage.setItem(LAST_ROLE_KEY, user.role);" in content
     assert "CUSTOMER: '/customer'" in content
     assert "MERCHANT: '/merchant'" in content
+
+
+def test_home_page_reuses_verified_role_handoff_and_rechecks_cached_merchant_role():
+    content = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
+
+    assert "const VERIFIED_ROLE_KEY = 'wx_verified_role';" in content
+    assert "const VERIFIED_TOKEN_KEY = 'wx_verified_token';" in content
+    assert "sessionStorage.setItem(VERIFIED_ROLE_KEY, user.role);" in content
+    assert "sessionStorage.setItem(VERIFIED_TOKEN_KEY, token);" in content
+    assert "if (token && lastRole === 'CUSTOMER' && ROLE_PAGES[lastRole])" in content
+    assert "if (token && lastRole === 'MERCHANT')" in content
+    assert "setStatus('正在确认商家身份...');" in content
