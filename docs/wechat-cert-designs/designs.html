@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>悦享到家服务页面设计稿</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #eef1f4;
+      color: #1f2a32;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    }
+    .sheet {
+      display: grid;
+      grid-template-columns: repeat(5, 390px);
+      gap: 28px;
+      padding: 32px;
+      width: max-content;
+    }
+    .phone {
+      width: 390px;
+      height: 844px;
+      overflow: hidden;
+      background: #f7f8f6;
+      position: relative;
+      box-shadow: 0 18px 42px rgba(23, 36, 48, .16);
+    }
+    .phone::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 30px;
+      background: rgba(255,255,255,.72);
+      z-index: 5;
+    }
+    .status {
+      position: absolute;
+      top: 8px;
+      left: 18px;
+      right: 18px;
+      z-index: 6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #1c262d;
+    }
+    .icons {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .signal, .wifi, .battery {
+      display: inline-block;
+      border: 1.6px solid currentColor;
+    }
+    .signal { width: 14px; height: 9px; border-top: 0; border-left: 0; transform: skew(-12deg); }
+    .wifi { width: 13px; height: 9px; border-bottom: 0; border-radius: 12px 12px 0 0; }
+    .battery { width: 20px; height: 10px; border-radius: 2px; position: relative; }
+    .battery::after { content: ""; position: absolute; right: -4px; top: 2px; width: 2px; height: 4px; background: currentColor; }
+    .topbar {
+      height: 78px;
+      padding: 36px 18px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      z-index: 2;
+    }
+    .brand {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .pill {
+      border: 1px solid rgba(31,42,50,.16);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #43515b;
+      background: rgba(255,255,255,.78);
+    }
+    .page {
+      height: 100%;
+      padding: 0 18px 18px;
+      position: relative;
+    }
+    .hero {
+      min-height: 236px;
+      margin: -78px -18px 18px;
+      padding: 102px 22px 22px;
+      color: #fff;
+      background:
+        linear-gradient(180deg, rgba(18,36,44,.12), rgba(18,36,44,.76)),
+        radial-gradient(circle at 78% 20%, rgba(247,185,83,.8), transparent 26%),
+        linear-gradient(135deg, #3b726d 0%, #7a9f86 50%, #c99a62 100%);
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.14;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    .hero p {
+      width: 270px;
+      margin: 10px 0 18px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: rgba(255,255,255,.92);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 0 18px;
+      border-radius: 8px;
+      border: 0;
+      background: #1e6f64;
+      color: #fff;
+      font-weight: 800;
+      font-size: 15px;
+    }
+    .btn.secondary {
+      color: #1f2a32;
+      background: #fff;
+      border: 1px solid #dfe6e1;
+    }
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      margin: 16px 0 10px;
+    }
+    .section-title h2 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      font-weight: 900;
+    }
+    .section-title span {
+      font-size: 12px;
+      color: #6d7a82;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .service-card, .plain-card, .order-card, .chat-card {
+      background: #fff;
+      border: 1px solid #e5ebe7;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .service-card {
+      min-height: 178px;
+    }
+    .thumb {
+      height: 82px;
+      background:
+        radial-gradient(circle at 22% 30%, rgba(255,255,255,.78), transparent 18%),
+        linear-gradient(135deg, #d9b66f, #6f9b8f 54%, #385d58);
+    }
+    .thumb.green { background: linear-gradient(135deg, #d7e8dc, #679282 48%, #2e5d58); }
+    .thumb.gold { background: linear-gradient(135deg, #f4d99e, #c58a42 54%, #69543b); }
+    .thumb.blue { background: linear-gradient(135deg, #d8e7e9, #76a7af 48%, #375d64); }
+    .service-card .info { padding: 10px; }
+    .name {
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.25;
+      margin-bottom: 6px;
+    }
+    .desc {
+      color: #68767e;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .price {
+      margin-top: 8px;
+      color: #c65f32;
+      font-size: 18px;
+      font-weight: 900;
+    }
+    .price small { font-size: 11px; color: #8d6f5e; }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 8px 0 14px;
+    }
+    .tab {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #edf2ef;
+      color: #55636a;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .tab.active {
+      background: #1e6f64;
+      color: #fff;
+    }
+    .list-card {
+      display: grid;
+      grid-template-columns: 104px 1fr;
+      gap: 12px;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #fff;
+      border: 1px solid #e5ebe7;
+      border-radius: 8px;
+    }
+    .list-card .thumb {
+      height: 104px;
+      border-radius: 6px;
+    }
+    .meta {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 7px;
+      color: #4d625c;
+      background: #edf4ef;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .detail-photo {
+      height: 246px;
+      margin: -78px -18px 0;
+      padding: 104px 22px 18px;
+      color: #fff;
+      background:
+        linear-gradient(180deg, rgba(31,42,50,.12), rgba(31,42,50,.72)),
+        linear-gradient(135deg, #395c58, #8fb2a2 48%, #d8b374);
+    }
+    .detail-photo h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.15;
+      font-weight: 900;
+    }
+    .detail-panel {
+      margin-top: -24px;
+      padding: 16px;
+      position: relative;
+      z-index: 1;
+      background: #fff;
+      border: 1px solid #e5ebe7;
+      border-radius: 8px;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 14px 0;
+    }
+    .kv div {
+      padding: 10px 6px;
+      text-align: center;
+      background: #f4f7f5;
+      border-radius: 8px;
+    }
+    .kv strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .kv span { color: #6d7a82; font-size: 11px; }
+    .steps {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .step {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #e5ebe7;
+      border-radius: 8px;
+    }
+    .num {
+      flex: 0 0 24px;
+      height: 24px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: #1e6f64;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .form {
+      display: grid;
+      gap: 10px;
+    }
+    .field {
+      padding: 12px;
+      background: #fff;
+      border: 1px solid #e2e9e4;
+      border-radius: 8px;
+    }
+    .field label {
+      display: block;
+      margin-bottom: 8px;
+      color: #6d7a82;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .field div {
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .paybar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 12px 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255,255,255,.95);
+      border-top: 1px solid #e2e9e4;
+    }
+    .paybar strong {
+      color: #c65f32;
+      font-size: 22px;
+    }
+    .order-card {
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .status-tag {
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: #1e6f64;
+      background: #e7f3ee;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .chat-card {
+      padding: 14px;
+      min-height: 218px;
+    }
+    .bubble {
+      max-width: 250px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .bubble.left { background: #f0f3f2; color: #314047; }
+    .bubble.right { margin-left: auto; background: #1e6f64; color: #fff; }
+    .notice {
+      padding: 12px;
+      color: #56646b;
+      background: #fff8e8;
+      border: 1px solid #f0dfb7;
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .bottom-nav {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 68px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding-top: 8px;
+      background: #fff;
+      border-top: 1px solid #e2e8e4;
+    }
+    .nav-item {
+      text-align: center;
+      color: #7a858b;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .nav-item::before {
+      content: "";
+      display: block;
+      width: 22px;
+      height: 22px;
+      margin: 0 auto 4px;
+      border-radius: 6px;
+      background: #dfe7e2;
+    }
+    .nav-item.active { color: #1e6f64; }
+    .nav-item.active::before { background: #1e6f64; }
+    .safe-space { height: 78px; }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <section class="phone" id="screen-1">
+      <div class="status"><span>20:28</span><span class="icons"><i class="signal"></i><i class="wifi"></i><i class="battery"></i></span></div>
+      <div class="topbar"><div class="brand">悦享到家</div><div class="pill">服务号页面</div></div>
+      <div class="page">
+        <div class="hero">
+          <h1>上门生活<br>放松服务</h1>
+          <p>预约专业服务人员到家，提供肩颈舒缓、足部护理、全身放松等生活服务。</p>
+          <div class="btn">立即预约</div>
+        </div>
+        <div class="section-title"><h2>热门服务</h2><span>明码标价 · 在线预约</span></div>
+        <div class="grid-2">
+          <div class="service-card"><div class="thumb green"></div><div class="info"><div class="name">肩颈舒缓</div><div class="desc">久坐人群日常放松</div><div class="price">¥129 <small>/ 45分钟</small></div></div></div>
+          <div class="service-card"><div class="thumb gold"></div><div class="info"><div class="name">足部护理</div><div class="desc">足部放松与护理</div><div class="price">¥159 <small>/ 60分钟</small></div></div></div>
+        </div>
+        <div class="section-title"><h2>服务保障</h2><span>预约前可咨询</span></div>
+        <div class="notice">服务人员实名认证，订单全程可查询；如需调整时间，可通过订单页联系客服处理。</div>
+        <div class="bottom-nav"><div class="nav-item active">首页</div><div class="nav-item">服务</div><div class="nav-item">订单</div><div class="nav-item">我的</div></div>
+      </div>
+    </section>
+
+    <section class="phone" id="screen-2">
+      <div class="status"><span>20:28</span><span class="icons"><i class="signal"></i><i class="wifi"></i><i class="battery"></i></span></div>
+      <div class="topbar"><div class="brand">服务项目</div><div class="pill">价格透明</div></div>
+      <div class="page">
+        <div class="tabs"><div class="tab active">全部</div><div class="tab">肩颈</div><div class="tab">足部</div><div class="tab">全身</div></div>
+        <div class="list-card"><div class="thumb green"></div><div><div class="name">肩颈舒缓护理</div><div class="desc">适合办公久坐、肩颈紧张人群的日常放松服务。</div><div class="meta"><span class="tag">45分钟</span><span class="tag">可上门</span></div><div class="price">¥129</div></div></div>
+        <div class="list-card"><div class="thumb gold"></div><div><div class="name">足部护理放松</div><div class="desc">足部护理、热敷放松，适合日常居家预约。</div><div class="meta"><span class="tag">60分钟</span><span class="tag">销量 86</span></div><div class="price">¥159</div></div></div>
+        <div class="list-card"><div class="thumb blue"></div><div><div class="name">全身放松服务</div><div class="desc">背部、腰腿和肩颈组合服务，按预约时间上门。</div><div class="meta"><span class="tag">90分钟</span><span class="tag">推荐</span></div><div class="price">¥239</div></div></div>
+        <div class="list-card"><div class="thumb"></div><div><div class="name">家庭双人套餐</div><div class="desc">两位用户同地址预约，服务人员按时到达。</div><div class="meta"><span class="tag">120分钟</span><span class="tag">套餐</span></div><div class="price">¥399</div></div></div>
+        <div class="bottom-nav"><div class="nav-item">首页</div><div class="nav-item active">服务</div><div class="nav-item">订单</div><div class="nav-item">我的</div></div>
+      </div>
+    </section>
+
+    <section class="phone" id="screen-3">
+      <div class="status"><span>20:28</span><span class="icons"><i class="signal"></i><i class="wifi"></i><i class="battery"></i></span></div>
+      <div class="topbar"><div class="brand">服务详情</div><div class="pill">可咨询</div></div>
+      <div class="page">
+        <div class="detail-photo"><h1>肩颈舒缓护理</h1><p>45分钟上门服务 · 日常放松护理</p></div>
+        <div class="detail-panel">
+          <div class="row"><div><div class="desc">服务价格</div><div class="price">¥129</div></div><div class="btn">预约</div></div>
+          <div class="kv"><div><strong>45分钟</strong><span>服务时长</span></div><div><strong>上门</strong><span>服务方式</span></div><div><strong>可改期</strong><span>订单协商</span></div></div>
+          <div class="desc">服务说明：针对肩颈、上背部进行基础放松护理，适合日常疲劳缓解和居家放松需求。本服务不包含医疗诊断、治疗或康复承诺。</div>
+        </div>
+        <div class="section-title"><h2>预约流程</h2><span>3步完成</span></div>
+        <div class="steps">
+          <div class="step"><div class="num">1</div><div><div class="name">选择服务与时间</div><div class="desc">选择项目、人数、上门时间和服务地址。</div></div></div>
+          <div class="step"><div class="num">2</div><div><div class="name">在线支付确认</div><div class="desc">微信支付成功后生成订单，可在订单页查看。</div></div></div>
+          <div class="step"><div class="num">3</div><div><div class="name">服务人员上门</div><div class="desc">如需调整，可通过客服会话沟通处理。</div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="phone" id="screen-4">
+      <div class="status"><span>20:28</span><span class="icons"><i class="signal"></i><i class="wifi"></i><i class="battery"></i></span></div>
+      <div class="topbar"><div class="brand">确认预约</div><div class="pill">微信支付</div></div>
+      <div class="page">
+        <div class="list-card"><div class="thumb green"></div><div><div class="name">肩颈舒缓护理</div><div class="desc">45分钟 · 服务人员按预约时间上门</div><div class="price">¥129</div></div></div>
+        <div class="form">
+          <div class="field"><label>预约时间</label><div>今天 20:30 - 21:15</div></div>
+          <div class="field"><label>服务地址</label><div>上海市浦东新区 ×× 路 ×× 小区</div></div>
+          <div class="field"><label>联系人</label><div>李女士 138****2668</div></div>
+          <div class="field"><label>备注</label><div>请提前电话联系，家中有门禁</div></div>
+        </div>
+        <div class="section-title"><h2>费用明细</h2><span>确认后支付</span></div>
+        <div class="plain-card" style="padding:14px;">
+          <div class="row"><span class="desc">服务费</span><strong>¥129</strong></div>
+          <div class="row" style="margin-top:10px;"><span class="desc">优惠</span><strong>¥0</strong></div>
+          <div class="row" style="margin-top:10px;"><span class="desc">实付金额</span><strong style="color:#c65f32;">¥129</strong></div>
+        </div>
+        <div class="paybar"><div><div class="desc">合计</div><strong>¥129</strong></div><div class="btn">微信支付</div></div>
+      </div>
+    </section>
+
+    <section class="phone" id="screen-5">
+      <div class="status"><span>20:28</span><span class="icons"><i class="signal"></i><i class="wifi"></i><i class="battery"></i></span></div>
+      <div class="topbar"><div class="brand">订单与客服</div><div class="pill">售后支持</div></div>
+      <div class="page">
+        <div class="order-card">
+          <div class="row"><div class="name">肩颈舒缓护理</div><div class="status-tag">已预约</div></div>
+          <div class="desc">订单号：20260705202866</div>
+          <div class="desc">预约时间：今天 20:30 - 21:15</div>
+          <div class="desc">服务地址：上海市浦东新区 ×× 路</div>
+          <div class="row" style="margin-top:12px;"><strong style="color:#c65f32;">¥129</strong><div class="btn secondary">联系商家</div></div>
+        </div>
+        <div class="section-title"><h2>客服会话</h2><span>订单问题可沟通</span></div>
+        <div class="chat-card">
+          <div class="bubble left">您好，已收到您的预约，服务人员会在出发前电话联系。</div>
+          <div class="bubble right">好的，门禁需要电话开门。</div>
+          <div class="bubble left">已备注。若需要改期，可在订单页提交或直接留言。</div>
+        </div>
+        <div class="section-title"><h2>服务规则</h2><span>清晰说明</span></div>
+        <div class="notice">订单支付后可查看服务进度；如需退款或改期，请在服务开始前联系客服处理，具体以订单状态为准。</div>
+        <div class="bottom-nav"><div class="nav-item">首页</div><div class="nav-item">服务</div><div class="nav-item active">订单</div><div class="nav-item">我的</div></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    (function () {
+      const id = window.location.hash.replace("#", "");
+      if (!id) return;
+      const target = document.getElementById(id);
+      if (!target) return;
+      document.querySelectorAll(".phone").forEach((item) => {
+        if (item !== target) item.remove();
+      });
+      document.body.style.background = "#f7f8f6";
+      const sheet = document.querySelector(".sheet");
+      sheet.style.display = "block";
+      sheet.style.padding = "0";
+      sheet.style.width = "390px";
+    }());
+  </script>
+</body>
+</html>
